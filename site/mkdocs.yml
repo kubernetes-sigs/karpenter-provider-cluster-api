@@ -1,0 +1,4 @@
+site_name: Karpenter Provider Cluster API
+theme:
+  name: material
+  logo: assets/karpcapi-logo.svg
