@@ -33,4 +33,9 @@ var (
 
 	LabelInstanceMemory = CapacityGroup + "/memory"
 	LabelInstanceCpu    = CapacityGroup + "/cpu"
+
+	// RestrictedLabelDomains are either prohibited by the kubelet or reserved by karpenter
+	RestrictedLabelDomains = []string{
+		Group,
+	}
 )
