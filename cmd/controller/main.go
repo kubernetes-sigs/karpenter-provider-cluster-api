@@ -17,11 +17,14 @@ limitations under the License.
 package main
 
 import (
+	"github.com/samber/lo"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
 	clusterapi "sigs.k8s.io/karpenter-provider-cluster-api/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"sigs.k8s.io/karpenter/pkg/controllers"
 	"sigs.k8s.io/karpenter/pkg/controllers/state"
 	"sigs.k8s.io/karpenter/pkg/operator"
+	"sigs.k8s.io/karpenter/pkg/operator/scheme"
 )
 
 func init() {
@@ -32,12 +35,13 @@ func init() {
 		clusterapi.InstanceCPULabelKey,
 		clusterapi.InstanceMemoryLabelKey,
 	)
+	lo.Must0(apis.AddToScheme(scheme.Scheme))
 }
 
 func main() {
 	ctx, op := operator.NewOperator()
 
-	cloudProvider := clusterapi.NewCloudProvider(ctx, op.GetClient(), clusterapi.ConstructInstanceTypes())
+	cloudProvider := clusterapi.NewCloudProvider(ctx, op.GetClient())
 	op.
 		WithControllers(ctx, controllers.NewControllers(
 			op.Clock,
