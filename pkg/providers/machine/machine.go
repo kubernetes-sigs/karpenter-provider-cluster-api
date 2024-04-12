@@ -19,7 +19,7 @@ package machine
 import (
 	"context"
 
-	capi "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -28,7 +28,7 @@ const (
 )
 
 type Provider interface {
-	List(context.Context) ([]*capi.Machine, error)
+	List(context.Context) ([]*capiv1beta1.Machine, error)
 }
 
 type DefaultProvider struct {
@@ -41,8 +41,8 @@ func NewDefaultProvider(_ context.Context, kubeClient client.Client) *DefaultPro
 	}
 }
 
-func (p *DefaultProvider) List(ctx context.Context) ([]*capi.Machine, error) {
-	machines := []*capi.Machine{}
+func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.Machine, error) {
+	machines := []*capiv1beta1.Machine{}
 
 	return machines, nil
 }

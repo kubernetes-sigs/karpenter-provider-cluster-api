@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"fmt"
 
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
@@ -52,7 +53,17 @@ func (c CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.Nod
 }
 
 func (c CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
-	return nil, fmt.Errorf("not implemented")
+	machines, err := c.machineProvider.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing machines, %w", err)
+	}
+
+	var nodeClaims []*v1beta1.NodeClaim
+	for _, machine := range machines {
+		nodeClaims = append(nodeClaims, c.machineToNodeClaim(machine))
+	}
+
+	return nodeClaims, nil
 }
 
 // Return the hard-coded instance types.
@@ -81,4 +92,9 @@ func (c CloudProvider) IsDrifted(ctx context.Context, nodeClaim *v1beta1.NodeCla
 
 func (c CloudProvider) Name() string {
 	return "clusterapi"
+}
+
+func (c CloudProvider) machineToNodeClaim(_ *capiv1beta1.Machine) *v1beta1.NodeClaim {
+	nodeClaim := v1beta1.NodeClaim{}
+	return &nodeClaim
 }
