@@ -22,19 +22,21 @@ import (
 	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 )
 
-func NewCloudProvider(ctx context.Context, kubeClient client.Client) *CloudProvider {
+func NewCloudProvider(ctx context.Context, kubeClient client.Client, machineProvider machine.Provider) *CloudProvider {
 	return &CloudProvider{
-		kubeClient: kubeClient,
+		kubeClient:      kubeClient,
+		machineProvider: machineProvider,
 	}
 }
 
 type CloudProvider struct {
-	kubeClient client.Client
+	kubeClient      client.Client
+	machineProvider machine.Provider
 }
 
 func (c CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {

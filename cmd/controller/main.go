@@ -17,31 +17,17 @@ limitations under the License.
 package main
 
 import (
-	"github.com/samber/lo"
-	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
 	clusterapi "sigs.k8s.io/karpenter-provider-cluster-api/pkg/cloudprovider"
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/operator"
 	"sigs.k8s.io/karpenter/pkg/controllers"
 	"sigs.k8s.io/karpenter/pkg/controllers/state"
-	"sigs.k8s.io/karpenter/pkg/operator"
-	"sigs.k8s.io/karpenter/pkg/operator/scheme"
+	coreoperator "sigs.k8s.io/karpenter/pkg/operator"
 )
 
-func init() {
-	v1beta1.RestrictedLabelDomains = v1beta1.RestrictedLabelDomains.Insert(clusterapi.Group)
-	v1beta1.WellKnownLabels = v1beta1.WellKnownLabels.Insert(
-		clusterapi.InstanceSizeLabelKey,
-		clusterapi.InstanceFamilyLabelKey,
-		clusterapi.InstanceCPULabelKey,
-		clusterapi.InstanceMemoryLabelKey,
-	)
-	lo.Must0(apis.AddToScheme(scheme.Scheme))
-}
-
 func main() {
-	ctx, op := operator.NewOperator()
+	ctx, op := operator.NewOperator(coreoperator.NewOperator())
 
-	cloudProvider := clusterapi.NewCloudProvider(ctx, op.GetClient())
+	cloudProvider := clusterapi.NewCloudProvider(ctx, op.GetClient(), op.MachineProvider)
 	op.
 		WithControllers(ctx, controllers.NewControllers(
 			op.Clock,
