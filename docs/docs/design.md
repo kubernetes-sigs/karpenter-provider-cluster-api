@@ -16,8 +16,8 @@ classDiagram
     NodeClaim : ...
     MachineTemplate : status.capacity ResourceList
     MachineTemplateList : Items []MachineTemplate
-    ClusterAPINodeClass --|> MachineTemplateList
-    MachineTemplateList --|> MachineTemplate : filtered list
+    ClusterAPINodeClass --|> MachineTemplateList : filtered list
+    MachineTemplateList --|> MachineTemplate
 ```
 
 This is the sequence diagram for what a request to create a new Node might
