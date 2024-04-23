@@ -44,5 +44,15 @@ func NewDefaultProvider(_ context.Context, kubeClient client.Client) *DefaultPro
 func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.Machine, error) {
 	machines := []*capiv1beta1.Machine{}
 
+	machineList := &capiv1beta1.MachineList{}
+	err := p.kubeClient.List(ctx, machineList)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, m := range machineList.Items {
+		machines = append(machines, &m)
+	}
+
 	return machines, nil
 }

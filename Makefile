@@ -12,6 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
+
+# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
+ENVTEST_K8S_VERSION = 1.29
+ENVTEST = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
+
+GINKGO = go run ${PROJECT_DIR}/vendor/github.com/onsi/ginkgo/v2/ginkgo
+GINKGO_ARGS = -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=30m
+
+CONTROLLER_GEN = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
+
 all: help
 
 .PHONY: build
@@ -23,7 +34,7 @@ help: ## Display help
 
 .PHONY: gen-objects
 gen-objects: ## generate the controller-gen related objects
-	controller-gen object paths="./..."
+	$(CONTROLLER_GEN) object paths="./..."
 
 .PHONY: generate
 generate: gen-objects manifests ## generate all controller-gen files
@@ -33,8 +44,16 @@ karpenter-clusterapi-controller: ## build the main karpenter controller
 
 .PHONY: manifests
 manifests: ## generate the controller-gen kubernetes manifests
-	controller-gen rbac:roleName=manager-role crd paths="./..." output:crd:artifacts:config=pkg/apis/crds
-	controller-gen rbac:roleName=manager-role crd paths="./vendor/sigs.k8s.io/karpenter/..." output:crd:artifacts:config=pkg/apis/crds
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./..." output:crd:artifacts:config=pkg/apis/crds
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./vendor/sigs.k8s.io/karpenter/..." output:crd:artifacts:config=pkg/apis/crds
+
+.PHONY: test
+test: unit
+
+.PHONY: unit
+unit: vendor
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./vendor/sigs.k8s.io/cluster-api/api/v1beta1/..." output:crd:artifacts:config=vendor/sigs.k8s.io/cluster-api/api/v1beta1
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin)" ${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} ./...
 
 .PHONY: vendor
 vendor: ## update modules and populate local vendor directory
