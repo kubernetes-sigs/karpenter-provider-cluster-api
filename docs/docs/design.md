@@ -5,6 +5,7 @@ and Cluster API CRDs.
 
 ```mermaid
 classDiagram
+    direction LR
     NodePool : NodeClass ref
     NodePool : spec {}
     ClusterAPINodeClass : MachineTemplate ref
