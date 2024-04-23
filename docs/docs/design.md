@@ -7,13 +7,13 @@ and Cluster API CRDs.
 classDiagram
     direction LR
     NodePool : NodeClass ref
-    NodePool : spec {}
+    NodePool : ...
     ClusterAPINodeClass : MachineTemplate ref
     ClusterAPINodeClass : Labels []string
     NodePool --|> ClusterAPINodeClass
     NodeClaim : NodeClass ref
     NodeClaim --|> ClusterAPINodeClass
-    NodeClaim : spec {}
+    NodeClaim : ...
     MachineTemplate : status.capacity ResourceList
     MachineTemplateList : Items []MachineTemplate
     ClusterAPINodeClass --|> MachineTemplateList
