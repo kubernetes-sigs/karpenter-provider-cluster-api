@@ -13,10 +13,10 @@ classDiagram
     NodeClaim : NodeClass ref
     NodeClaim --|> ClusterAPINodeClass
     NodeClaim : spec {}
-    KubemarkMachineTemplate : status.capacity ResourceList
-    KubemarkMachineTemplateList : Items []KubemarkMachineTemplate
-    ClusterAPINodeClass --|> KubemarkMachineTemplateList
-    KubemarkMachineTemplateList --|> KubemarkMachineTemplate : filtered list
+    MachineTemplate : status.capacity ResourceList
+    MachineTemplateList : Items []MachineTemplate
+    ClusterAPINodeClass --|> MachineTemplateList
+    MachineTemplateList --|> MachineTemplate : filtered list
 ```
 
 This is the sequence diagram for what a request to create a new Node might

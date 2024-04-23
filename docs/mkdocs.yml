@@ -2,3 +2,9 @@ site_name: Karpenter Provider Cluster API
 theme:
   name: material
   logo: assets/karpcapi-logo.svg
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
