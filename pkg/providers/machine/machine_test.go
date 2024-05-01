@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
 var _ = Describe("DefaultProvider List method", func() {
@@ -34,5 +35,25 @@ var _ = Describe("DefaultProvider List method", func() {
 		machines, err := provider.List(context.TODO())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(0))
+	})
+
+	It("returns a list of correct length when there are machines with the proper annotation", func() {
+		machine := &capiv1beta1.Machine{}
+		machine.SetName("karpenter-managed-1")
+		machine.SetNamespace(testNamespace)
+		labels := machine.GetLabels()
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		labels[nodePoolOwnedLabel] = ""
+		machine.SetLabels(labels)
+		machine.Spec.ClusterName = "karpenter-cluster"
+
+		err := cl.Create(context.TODO(), machine)
+		Expect(err).ToNot(HaveOccurred())
+
+		machines, err := provider.List(context.TODO())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machines).To(HaveLen(1))
 	})
 })

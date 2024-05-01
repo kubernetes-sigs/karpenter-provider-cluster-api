@@ -17,11 +17,13 @@ limitations under the License.
 package machine
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/textlogger"
@@ -36,6 +38,10 @@ func init() {
 		panic(err)
 	}
 }
+
+const (
+	testNamespace = "karpenter-cluster-api"
+)
 
 var cfg *rest.Config
 var cl client.Client
@@ -67,6 +73,10 @@ var _ = BeforeSuite(func() {
 	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cl).NotTo(BeNil())
+
+	namespace := &corev1.Namespace{}
+	namespace.SetName(testNamespace)
+	Expect(cl.Create(context.Background(), namespace)).To(Succeed())
 })
 
 var _ = AfterSuite(func() {
