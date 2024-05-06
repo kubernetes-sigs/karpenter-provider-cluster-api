@@ -39,10 +39,6 @@ func init() {
 	}
 }
 
-const (
-	testNamespace = "karpenter-cluster-api"
-)
-
 var cfg *rest.Config
 var cl client.Client
 var testEnv *envtest.Environment

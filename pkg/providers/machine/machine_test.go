@@ -22,38 +22,75 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	testNamespace = "karpenter-cluster-api"
 )
 
 var _ = Describe("DefaultProvider List method", func() {
 	var provider Provider
 
 	BeforeEach(func() {
-		provider = NewDefaultProvider(context.TODO(), cl)
+		provider = NewDefaultProvider(context.Background(), cl)
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineList := &capiv1beta1.MachineList{}
+			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineList
+		}).Should(HaveField("Items", HaveLen(0)))
 	})
 
 	It("returns an empty list when no Machines are present in API", func() {
-		machines, err := provider.List(context.TODO())
+		machines, err := provider.List(context.Background())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(0))
 	})
 
-	It("returns a list of correct length when there are machines with the proper annotation", func() {
-		machine := &capiv1beta1.Machine{}
-		machine.SetName("karpenter-managed-1")
-		machine.SetNamespace(testNamespace)
-		labels := machine.GetLabels()
-		if labels == nil {
-			labels = map[string]string{}
-		}
-		labels[nodePoolOwnedLabel] = ""
-		machine.SetLabels(labels)
-		machine.Spec.ClusterName = "karpenter-cluster"
+	It("returns a list of correct length when there are only karpenter member machines", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		err := cl.Create(context.TODO(), machine)
-		Expect(err).ToNot(HaveOccurred())
-
-		machines, err := provider.List(context.TODO())
+		machines, err := provider.List(context.Background())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(1))
 	})
+
+	It("returns a list of correct length when there are mixed member machines", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machine = newMachine("clusterapi-1", "workload-cluster", false)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machines, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machines).To(HaveLen(1))
+	})
+
+	It("returns an empty list when no member machines are present", func() {
+		machine := newMachine("clusterapi-1", "workload-cluster", false)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machines, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machines).To(HaveLen(0))
+	})
 })
+
+func newMachine(machineName string, clusterName string, karpenterMember bool) *capiv1beta1.Machine {
+	machine := &capiv1beta1.Machine{}
+	machine.SetName(machineName)
+	machine.SetNamespace(testNamespace)
+	if karpenterMember {
+		labels := map[string]string{}
+		labels[nodePoolMemberLabel] = ""
+		machine.SetLabels(labels)
+	}
+	machine.Spec.ClusterName = clusterName
+	return machine
+}

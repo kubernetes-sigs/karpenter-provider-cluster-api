@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	// nodePoolOwnedLabel is used to identify Machines which have been created by karpenter.
-	nodePoolOwnedLabel = "cluster-api.karpenter.sh/node-pool-owned"
+	// nodePoolMemberLabel is used to identify Machines which have been created by karpenter.
+	nodePoolMemberLabel = "node.cluster.x-k8s.io/karpenter-member"
 )
 
 type Provider interface {
@@ -46,7 +46,7 @@ func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.Machine, err
 	machines := []*capiv1beta1.Machine{}
 
 	listOptions := client.MatchingLabels{
-		nodePoolOwnedLabel: "",
+		nodePoolMemberLabel: "",
 	}
 	machineList := &capiv1beta1.MachineList{}
 	err := p.kubeClient.List(ctx, machineList, listOptions)
