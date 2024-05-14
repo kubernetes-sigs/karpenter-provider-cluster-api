@@ -13,7 +13,7 @@ require (
 	k8s.io/client-go v0.30.0
 	k8s.io/klog/v2 v2.120.1
 	sigs.k8s.io/cluster-api v1.6.3
-	sigs.k8s.io/controller-runtime v0.17.2
+	sigs.k8s.io/controller-runtime v0.18.2
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20240423173400-ed81fa696dea
 	sigs.k8s.io/controller-tools v0.15.0
 	sigs.k8s.io/karpenter v0.35.0
@@ -29,7 +29,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
-	github.com/evanphx/json-patch/v5 v5.8.0 // indirect
+	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
