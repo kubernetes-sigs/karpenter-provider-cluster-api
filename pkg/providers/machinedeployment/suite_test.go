@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package machine
+package machinedeployment
 
 import (
 	"context"
@@ -50,7 +50,7 @@ var testEnv *envtest.Environment
 func TestMachineProvider(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Machine Provider Suite")
+	RunSpecs(t, "MachineDeployment Provider Suite")
 }
 
 var _ = BeforeSuite(func() {

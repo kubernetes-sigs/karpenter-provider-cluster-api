@@ -23,10 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
-
-const (
-	testNamespace = "karpenter-cluster-api"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
 
 var _ = Describe("DefaultProvider List method", func() {
@@ -88,7 +85,7 @@ func newMachine(machineName string, clusterName string, karpenterMember bool) *c
 	machine.SetNamespace(testNamespace)
 	if karpenterMember {
 		labels := map[string]string{}
-		labels[nodePoolMemberLabel] = ""
+		labels[providers.NodePoolMemberLabel] = ""
 		machine.SetLabels(labels)
 	}
 	machine.Spec.ClusterName = clusterName

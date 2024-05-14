@@ -24,20 +24,23 @@ import (
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
 	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 )
 
-func NewCloudProvider(ctx context.Context, kubeClient client.Client, machineProvider machine.Provider) *CloudProvider {
+func NewCloudProvider(ctx context.Context, kubeClient client.Client, machineProvider machine.Provider, machineDeploymentProvider machinedeployment.Provider) *CloudProvider {
 	return &CloudProvider{
-		kubeClient:      kubeClient,
-		machineProvider: machineProvider,
+		kubeClient:                kubeClient,
+		machineProvider:           machineProvider,
+		machineDeploymentProvider: machineDeploymentProvider,
 	}
 }
 
 type CloudProvider struct {
-	kubeClient      client.Client
-	machineProvider machine.Provider
+	kubeClient                client.Client
+	machineProvider           machine.Provider
+	machineDeploymentProvider machinedeployment.Provider
 }
 
 func (c CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {

@@ -27,7 +27,7 @@ import (
 func main() {
 	ctx, op := operator.NewOperator(coreoperator.NewOperator())
 
-	cloudProvider := clusterapi.NewCloudProvider(ctx, op.GetClient(), op.MachineProvider)
+	cloudProvider := clusterapi.NewCloudProvider(ctx, op.GetClient(), op.MachineProvider, op.MachineDeploymentProvider)
 	op.
 		WithControllers(ctx, controllers.NewControllers(
 			op.Clock,

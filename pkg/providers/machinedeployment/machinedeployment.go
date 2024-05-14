@@ -14,18 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package machine
+package machinedeployment
 
 import (
 	"context"
 
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
 
 type Provider interface {
-	List(context.Context) ([]*capiv1beta1.Machine, error)
+	Get(context.Context, string, string) (*capiv1beta1.MachineDeployment, error)
 }
 
 type DefaultProvider struct {
@@ -38,21 +37,11 @@ func NewDefaultProvider(_ context.Context, kubeClient client.Client) *DefaultPro
 	}
 }
 
-func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.Machine, error) {
-	machines := []*capiv1beta1.Machine{}
-
-	listOptions := client.MatchingLabels{
-		providers.NodePoolMemberLabel: "",
-	}
-	machineList := &capiv1beta1.MachineList{}
-	err := p.kubeClient.List(ctx, machineList, listOptions)
+func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string) (*capiv1beta1.MachineDeployment, error) {
+	machineDeployment := &capiv1beta1.MachineDeployment{}
+	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, machineDeployment)
 	if err != nil {
-		return nil, err
+		machineDeployment = nil
 	}
-
-	for _, m := range machineList.Items {
-		machines = append(machines, &m)
-	}
-
-	return machines, nil
+	return machineDeployment, err
 }
