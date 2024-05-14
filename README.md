@@ -36,10 +36,12 @@ the architecture and implementation of this provider.
   deployment pattern will be to have Cluster API Machine resources in the same cluster
   as the Karpenter NodePool resources, with the Node and Pod objects residing in a
   different cluster.
-* **Creation of orphan machines.**
-  As an initial approach to creating machines in Cluster API, the Karpenter provider will
-  launch orphan machines. These machines do not belong to a scalable resource like a
-  MachineSet, and have different consideration for creation and destruction.
+* **Tracking Machines through scalable resource**
+  As an initial design approach, this provider will interface with MachineDeployment
+  resource from Cluster API. The intention is to preserve the experience and behavioral
+  configurations encoded in MachineDeployments to help guide the creation of Machines
+  from NodeClaims. This does create some unique issues when translating between replica
+  changes in the MachineDeployment to specific Machines that are created.
 * **Identification of Cluster API resources participating with Karpenter.**
   There are several types of Cluster API resources which can participate in Karpenter
   provisioning, from the infrastructure templates to the machines. Users will need to
