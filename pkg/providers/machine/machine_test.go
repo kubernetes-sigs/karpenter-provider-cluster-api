@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
 
-var _ = Describe("DefaultProvider List method", func() {
+var _ = Describe("Machine DefaultProvider List method", func() {
 	var provider Provider
 
 	BeforeEach(func() {
