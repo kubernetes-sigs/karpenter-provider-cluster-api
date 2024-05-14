@@ -34,11 +34,11 @@ var _ = Describe("MachineDeployment DefaultProvider Get method", func() {
 	})
 
 	AfterEach(func() {
-		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
 		Eventually(func() client.ObjectList {
-			machineList := &capiv1beta1.MachineList{}
-			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
-			return machineList
+			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineDeploymentList
 		}).Should(HaveField("Items", HaveLen(0)))
 	})
 
@@ -52,12 +52,12 @@ var _ = Describe("MachineDeployment DefaultProvider Get method", func() {
 		Expect(machineDeployment).ToNot(BeNil())
 	})
 
-    It("returns nil and an error when the MachineDeployment does not exist", func() {
+	It("returns nil and an error when the MachineDeployment does not exist", func() {
 		name := "test-machine-deployment"
 		machineDeployment, err := provider.Get(context.Background(), name, testNamespace)
 		Expect(err).To(HaveOccurred())
 		Expect(machineDeployment).To(BeNil())
-    })
+	})
 })
 
 func newMachineDeployment(name string, clusterName string, karpenterMember bool) *capiv1beta1.MachineDeployment {
