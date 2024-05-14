@@ -51,6 +51,13 @@ var _ = Describe("MachineDeployment DefaultProvider Get method", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machineDeployment).ToNot(BeNil())
 	})
+
+    It("returns nil and an error when the MachineDeployment does not exist", func() {
+		name := "test-machine-deployment"
+		machineDeployment, err := provider.Get(context.Background(), name, testNamespace)
+		Expect(err).To(HaveOccurred())
+		Expect(machineDeployment).To(BeNil())
+    })
 })
 
 func newMachineDeployment(name string, clusterName string, karpenterMember bool) *capiv1beta1.MachineDeployment {
