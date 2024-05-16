@@ -18,10 +18,12 @@ package cloudprovider
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -46,6 +48,12 @@ var _ = Describe("CloudProvider machineToNodeClaim method", func() {
 			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
 			return machineList
 		}).Should(HaveField("Items", HaveLen(0)))
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineDeploymentList
+		}).Should(HaveField("Items", HaveLen(0)))
 	})
 
 	It("returns the proper capacity information in the NodeClaim", func() {
@@ -68,6 +76,57 @@ var _ = Describe("CloudProvider machineToNodeClaim method", func() {
 		Expect(nodeClaim.Status.Capacity).Should(HaveKeyWithValue(corev1.ResourceCPU, cpu))
 		memory := resource.MustParse("16777220Ki")
 		Expect(nodeClaim.Status.Capacity).Should(HaveKeyWithValue(corev1.ResourceMemory, memory))
+	})
+
+	It("returns an error when the cpu annotation is not on the MachineDeployment", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		annotations := map[string]string{
+			memoryKey: "16777220Ki",
+		}
+		machineDeployment.SetAnnotations(annotations)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
+		Expect(nodeClaim).To(BeNil())
+		Expect(err).To(MatchError(fmt.Errorf("unable to convert Machine %q to a NodeClaim, no cpu capacity found on MachineDeployment %q", machine.Name, machineDeployment.Name)))
+	})
+
+	It("returns an error when the memory annotation is not on the MachineDeployment", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		annotations := map[string]string{
+			cpuKey: "4",
+		}
+		machineDeployment.SetAnnotations(annotations)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
+		Expect(nodeClaim).To(BeNil())
+		Expect(err).To(MatchError(fmt.Errorf("unable to convert Machine %q to a NodeClaim, no memory capacity found on MachineDeployment %q", machine.Name, machineDeployment.Name)))
+	})
+
+	It("returns an error when the MachineDeployment label is not present", func() {
+		machine := newMachine("m-1", "test-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
+		Expect(nodeClaim).To(BeNil())
+		Expect(err).To(MatchError(fmt.Errorf("unable to convert Machine %q to a NodeClaim, Machine has no MachineDeployment label %q", "m-1", capiv1beta1.MachineDeploymentNameLabel)))
+	})
+
+	It("returns a not found error when the MachineDeployment is not found", func() {
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = "md-1"
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
+		Expect(nodeClaim).To(BeNil())
+		Expect(err).To(MatchError(errors.IsNotFound, "IsNotFound"))
 	})
 })
 
