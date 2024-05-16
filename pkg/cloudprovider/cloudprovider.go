@@ -21,12 +21,26 @@ import (
 	_ "embed"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
 	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
+)
+
+const (
+	// TODO (elmiko) if we make these exposed constants from the CAS we can import them instead of redifining and risking drift
+	cpuKey          = "capacity.cluster-autoscaler.kubernetes.io/cpu"
+	memoryKey       = "capacity.cluster-autoscaler.kubernetes.io/memory"
+	gpuCountKey     = "capacity.cluster-autoscaler.kubernetes.io/gpu-count"
+	gpuTypeKey      = "capacity.cluster-autoscaler.kubernetes.io/gpu-type"
+	diskCapacityKey = "capacity.cluster-autoscaler.kubernetes.io/ephemeral-disk"
+	labelsKey       = "capacity.cluster-autoscaler.kubernetes.io/labels"
+	taintsKey       = "capacity.cluster-autoscaler.kubernetes.io/taints"
+	maxPodsKey      = "capacity.cluster-autoscaler.kubernetes.io/maxPods"
 )
 
 func NewCloudProvider(ctx context.Context, kubeClient client.Client, machineProvider machine.Provider, machineDeploymentProvider machinedeployment.Provider) *CloudProvider {
@@ -63,7 +77,11 @@ func (c CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
 
 	var nodeClaims []*v1beta1.NodeClaim
 	for _, machine := range machines {
-		nodeClaims = append(nodeClaims, c.machineToNodeClaim(machine))
+		nodeClaim, err := c.machineToNodeClaim(ctx, machine)
+		if err != nil {
+			return []*v1beta1.NodeClaim{}, err
+		}
+		nodeClaims = append(nodeClaims, nodeClaim)
 	}
 
 	return nodeClaims, nil
@@ -97,7 +115,45 @@ func (c CloudProvider) Name() string {
 	return "clusterapi"
 }
 
-func (c CloudProvider) machineToNodeClaim(_ *capiv1beta1.Machine) *v1beta1.NodeClaim {
+func (c CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*v1beta1.NodeClaim, error) {
 	nodeClaim := v1beta1.NodeClaim{}
-	return &nodeClaim
+	if machine.Spec.ProviderID != nil {
+		nodeClaim.Status.ProviderID = *machine.Spec.ProviderID
+	}
+
+	// we want to get the MachineDeployment that owns this Machine to read the capacity information.
+	// to being this process, we get the MachineDeployment name from the Machine labels.
+	mdName, found := machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel]
+	if !found {
+		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, Machine has no MachineDeployment label %q", machine.GetName(), capiv1beta1.MachineDeploymentNameLabel)
+	}
+	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, mdName, machine.GetNamespace())
+	if err != nil {
+		return nil, err
+	}
+
+	// machine capacity
+	// we are using the scale from zero annotations on the MachineDeployment to make this accessible.
+	// TODO (elmiko) improve this once upstream has advanced the state of the art, also add a mechanism
+	// to lookup the infra machine template similar to how CAS does it.
+	capacity := corev1.ResourceList{}
+	cpu, found := machineDeployment.GetAnnotations()[cpuKey]
+	if !found {
+		// if there is no cpu resource we aren't going to get far, return an error
+		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, no cpu capacity found on MachineDeployment %q", machine.GetName(), mdName)
+	}
+	capacity[corev1.ResourceCPU] = resource.MustParse(cpu)
+
+	memory, found := machineDeployment.GetAnnotations()[memoryKey]
+	if !found {
+		// if there is no memory resource we aren't going to get far, return an error
+		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, no memory capacity found on MachineDeployment %q", machine.GetName(), mdName)
+	}
+	capacity[corev1.ResourceMemory] = resource.MustParse(memory)
+
+	// TODO (elmiko) add gpu, maxPods, labels, and taints
+
+	nodeClaim.Status.Capacity = capacity
+
+	return &nodeClaim, nil
 }
