@@ -18,9 +18,9 @@ The current focus is on implementing the [Karpenter cloudprovider interface][kci
 - [ ] `Delete`
 - [ ] `Get`
 - [x] `List`
-- [ ] `GetInstanceTypes`
+- [x] `GetInstanceTypes`
 - [ ] `IsDrifted`
-- [ ] `Name`
+- [x] `Name`
 - [ ] `GetSupportedNodeClasses`
 
 ### Design topics

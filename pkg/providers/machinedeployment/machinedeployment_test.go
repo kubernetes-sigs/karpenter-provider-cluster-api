@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
@@ -77,7 +78,7 @@ var _ = Describe("MachineDeployment DefaultProvider.List method", func() {
 	})
 
 	It("returns an empty list when no MachineDeployments are present in API", func() {
-		machineDeployments, err := provider.List(context.Background())
+		machineDeployments, err := provider.List(context.Background(), nil)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machineDeployments).To(HaveLen(0))
 	})
@@ -86,7 +87,7 @@ var _ = Describe("MachineDeployment DefaultProvider.List method", func() {
 		machineDeployment := newMachineDeployment("md-1", "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
-		machineDeployments, err := provider.List(context.Background())
+		machineDeployments, err := provider.List(context.Background(), nil)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machineDeployments).To(HaveLen(1))
 	})
@@ -98,7 +99,7 @@ var _ = Describe("MachineDeployment DefaultProvider.List method", func() {
 		machineDeployment = newMachineDeployment("md-2", "workload-cluster", false)
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
-		machineDeployments, err := provider.List(context.Background())
+		machineDeployments, err := provider.List(context.Background(), nil)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machineDeployments).To(HaveLen(1))
 	})
@@ -107,7 +108,50 @@ var _ = Describe("MachineDeployment DefaultProvider.List method", func() {
 		machineDeployment := newMachineDeployment("md-1", "workload-cluster", false)
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
-		machineDeployments, err := provider.List(context.Background())
+		machineDeployments, err := provider.List(context.Background(), nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machineDeployments).To(HaveLen(0))
+	})
+
+	It("returns a list of correct length when there are mixed member MachineDeployments with a selector", func() {
+		machineDeployment := newMachineDeployment("md-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		selectorLabel := "label-for-selection"
+		machineDeployment = newMachineDeployment("md-2", "karpenter-cluster", true)
+		machineDeployment.GetLabels()[selectorLabel] = ""
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machineDeployment = newMachineDeployment("md-3", "karpenter-cluster", false)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		selector := &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				selectorLabel: "",
+			},
+		}
+		machineDeployments, err := provider.List(context.Background(), selector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machineDeployments).To(HaveLen(1))
+	})
+
+	It("returns an empty list when there are no member MachineDeployments with a selector", func() {
+		machineDeployment := newMachineDeployment("md-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machineDeployment = newMachineDeployment("md-2", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machineDeployment = newMachineDeployment("md-3", "karpenter-cluster", false)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		selectorLabel := "label-for-selection"
+		selector := &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				selectorLabel: "",
+			},
+		}
+		machineDeployments, err := provider.List(context.Background(), selector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machineDeployments).To(HaveLen(0))
 	})

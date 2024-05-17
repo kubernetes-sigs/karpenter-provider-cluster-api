@@ -34,4 +34,5 @@ var (
 		metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 		return nil
 	})
+	AddToScheme = SchemeBuilder.AddToScheme
 )

@@ -48,8 +48,8 @@ type ClusterAPINodeClass struct {
 // ClusterAPINodeClassList contains a list of ClusterAPINodeClasses
 // +kubebuilder:object:root=true
 type ClusterAPINodeClassList struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []ClusterAPINodeClass `json:"items"`
 }

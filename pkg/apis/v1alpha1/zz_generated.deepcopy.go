@@ -40,7 +40,7 @@ func (in *ClusterAPINodeClass) DeepCopyObject() runtime.Object {
 func (in *ClusterAPINodeClassList) DeepCopyInto(out *ClusterAPINodeClassList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]ClusterAPINodeClass, len(*in))

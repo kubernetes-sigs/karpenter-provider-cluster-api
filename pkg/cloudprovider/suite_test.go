@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/textlogger"
@@ -31,26 +32,23 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 const (
 	testNamespace = "karpenter-cluster-api"
 )
 
-func init() {
-	if err := capiv1beta1.AddToScheme(scheme.Scheme); err != nil {
-		panic(err)
-	}
-}
-
 var cfg *rest.Config
 var cl client.Client
 var testEnv *envtest.Environment
+var testScheme *runtime.Scheme
 
 func TestMachineProvider(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Machine Provider Suite")
+	RunSpecs(t, "CloudProvider Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -60,17 +58,22 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join("../..", "vendor", "sigs.k8s.io", "cluster-api", "api", "v1beta1"),
+			filepath.Join("..", "..", "vendor", "sigs.k8s.io", "cluster-api", "api", "v1beta1"),
+			filepath.Join("..", "apis", "crds"),
 		},
+		ErrorIfCRDPathMissing: true,
 	}
-
-	Expect(capiv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	cl, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	testScheme = scheme.Scheme
+	Expect(capiv1beta1.AddToScheme(testScheme)).To(Succeed())
+	Expect(api.AddToScheme(testScheme)).To(Succeed())
+	Expect(v1beta1.SchemeBuilder.AddToScheme(testScheme)).To(Succeed())
+
+	cl, err = client.New(cfg, client.Options{Scheme: testScheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cl).NotTo(BeNil())
 
