@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
 
-var _ = Describe("MachineDeployment DefaultProvider Get method", func() {
+var _ = Describe("MachineDeployment DefaultProvider.Get method", func() {
 	var provider Provider
 
 	BeforeEach(func() {
@@ -57,6 +57,59 @@ var _ = Describe("MachineDeployment DefaultProvider Get method", func() {
 		machineDeployment, err := provider.Get(context.Background(), name, testNamespace)
 		Expect(err).To(HaveOccurred())
 		Expect(machineDeployment).To(BeNil())
+	})
+})
+
+var _ = Describe("MachineDeployment DefaultProvider.List method", func() {
+	var provider Provider
+
+	BeforeEach(func() {
+		provider = NewDefaultProvider(context.Background(), cl)
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineDeploymentList
+		}).Should(HaveField("Items", HaveLen(0)))
+	})
+
+	It("returns an empty list when no MachineDeployments are present in API", func() {
+		machineDeployments, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machineDeployments).To(HaveLen(0))
+	})
+
+	It("returns a list of correct length when there are only karpenter member MachineDeployments", func() {
+		machineDeployment := newMachineDeployment("md-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machineDeployments, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machineDeployments).To(HaveLen(1))
+	})
+
+	It("returns a list of correct length when there are mixed member MachineDeployments", func() {
+		machineDeployment := newMachineDeployment("md-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machineDeployment = newMachineDeployment("md-2", "workload-cluster", false)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machineDeployments, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machineDeployments).To(HaveLen(1))
+	})
+
+	It("returns an empty list when no member MachineDeployments are present", func() {
+		machineDeployment := newMachineDeployment("md-1", "workload-cluster", false)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machineDeployments, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machineDeployments).To(HaveLen(0))
 	})
 })
 

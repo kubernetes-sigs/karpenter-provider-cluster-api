@@ -92,7 +92,7 @@ func (c CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.N
 	instanceTypes := []*cloudprovider.InstanceType{}
 
 	if nodePool == nil {
-
+		return instanceTypes, fmt.Errorf("node pool reference is nil, no way to proceed")
 	}
 
 	// otherwise, get the details from the nodepool to inform which named nodeclass (if present) and other options
