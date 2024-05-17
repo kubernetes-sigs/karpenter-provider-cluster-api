@@ -32,7 +32,77 @@ import (
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
 )
 
-var _ = Describe("CloudProvider machineToNodeClaim method", func() {
+var _ = Describe("CloudProvider.List method", func() {
+	var provider *CloudProvider
+
+	BeforeEach(func() {
+		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
+		machineDeploymentProvider := machinedeployment.NewDefaultProvider(context.Background(), cl)
+		provider = NewCloudProvider(context.Background(), cl, machineProvider, machineDeploymentProvider)
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineList := &capiv1beta1.MachineList{}
+			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineList
+		}).Should(HaveField("Items", HaveLen(0)))
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineDeploymentList
+		}).Should(HaveField("Items", HaveLen(0)))
+	})
+
+	It("returns an empty list when no Machines are present", func() {
+		nodeClaims, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nodeClaims).To(HaveLen(0))
+	})
+
+	It("returns the correct size list when only participating Machines are present", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		annotations := map[string]string{
+			cpuKey:    "4",
+			memoryKey: "16777220Ki",
+		}
+		machineDeployment.SetAnnotations(annotations)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaims, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nodeClaims).To(HaveLen(1))
+	})
+
+	It("returns the correct size list when participating and non-participating Machines are present", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		annotations := map[string]string{
+			cpuKey:    "4",
+			memoryKey: "16777220Ki",
+		}
+		machineDeployment.SetAnnotations(annotations)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machine = newMachine("m-2", "test-cluster", false)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaims, err := provider.List(context.Background())
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nodeClaims).To(HaveLen(1))
+	})
+})
+
+var _ = Describe("CloudProvider.machineToNodeClaim method", func() {
 	var provider *CloudProvider
 
 	BeforeEach(func() {
