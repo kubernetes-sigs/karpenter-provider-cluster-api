@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
 
-var _ = Describe("Machine DefaultProvider List method", func() {
+var _ = Describe("Machine DefaultProvider.List method", func() {
 	var provider Provider
 
 	BeforeEach(func() {
@@ -48,7 +48,7 @@ var _ = Describe("Machine DefaultProvider List method", func() {
 		Expect(machines).To(HaveLen(0))
 	})
 
-	It("returns a list of correct length when there are only karpenter member machines", func() {
+	It("returns a list of correct length when there are only karpenter member Machines", func() {
 		machine := newMachine("karpenter-1", "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
@@ -57,7 +57,7 @@ var _ = Describe("Machine DefaultProvider List method", func() {
 		Expect(machines).To(HaveLen(1))
 	})
 
-	It("returns a list of correct length when there are mixed member machines", func() {
+	It("returns a list of correct length when there are mixed member Machines", func() {
 		machine := newMachine("karpenter-1", "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
@@ -69,7 +69,7 @@ var _ = Describe("Machine DefaultProvider List method", func() {
 		Expect(machines).To(HaveLen(1))
 	})
 
-	It("returns an empty list when no member machines are present", func() {
+	It("returns an empty list when no member Machines are present", func() {
 		machine := newMachine("clusterapi-1", "workload-cluster", false)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 

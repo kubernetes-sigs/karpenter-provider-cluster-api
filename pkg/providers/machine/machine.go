@@ -41,11 +41,13 @@ func NewDefaultProvider(_ context.Context, kubeClient client.Client) *DefaultPro
 func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.Machine, error) {
 	machines := []*capiv1beta1.Machine{}
 
-	listOptions := client.MatchingLabels{
-		providers.NodePoolMemberLabel: "",
+	listOptions := []client.ListOption{
+		client.MatchingLabels{
+			providers.NodePoolMemberLabel: "",
+		},
 	}
 	machineList := &capiv1beta1.MachineList{}
-	err := p.kubeClient.List(ctx, machineList, listOptions)
+	err := p.kubeClient.List(ctx, machineList, listOptions...)
 	if err != nil {
 		return nil, err
 	}
