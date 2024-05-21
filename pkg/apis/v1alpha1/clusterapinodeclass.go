@@ -21,7 +21,14 @@ import (
 )
 
 // ClusterAPINodeClassSpec is the top level specification for ClusterAPINodeClasses.
-type ClusterAPINodeClassSpec struct{}
+type ClusterAPINodeClassSpec struct {
+	// scalableResourceSelector is a LabelSelector that is used to identify the Cluster API scalable
+	// resources that are participating in Karpenter provisioning. For a deeper discussion of
+	// how label selectors are used in Kubernetes, please see the following:
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+	// https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/label-selector/
+	ScalableResourceSelector *metav1.LabelSelector `json:"scalableResourceSelector,omitempty"`
+}
 
 // ClusterAPINodeClassStatus is the status for ClusterAPINodeClasses
 type ClusterAPINodeClassStatus struct{}
