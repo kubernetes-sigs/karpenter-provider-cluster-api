@@ -19,6 +19,7 @@ package machinedeployment
 import (
 	"context"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
@@ -26,7 +27,7 @@ import (
 
 type Provider interface {
 	Get(context.Context, string, string) (*capiv1beta1.MachineDeployment, error)
-	List(context.Context) ([]*capiv1beta1.MachineDeployment, error)
+	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error)
 }
 
 type DefaultProvider struct {
@@ -48,13 +49,21 @@ func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string
 	return machineDeployment, err
 }
 
-func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.MachineDeployment, error) {
+func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error) {
 	machineDeployments := []*capiv1beta1.MachineDeployment{}
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
 			providers.NodePoolMemberLabel: "",
 		},
+	}
+
+	if selector != nil {
+		s, err := metav1.LabelSelectorAsSelector(selector)
+		if err != nil {
+			return machineDeployments, err
+		}
+		listOptions = append(listOptions, client.MatchingLabelsSelector{s})
 	}
 	machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
 	err := p.kubeClient.List(ctx, machineDeploymentList, listOptions...)
