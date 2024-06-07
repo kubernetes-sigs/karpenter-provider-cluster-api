@@ -24,6 +24,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -73,24 +74,6 @@ func (c CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.Nod
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
-	machines, err := c.machineProvider.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("listing machines, %w", err)
-	}
-
-	var nodeClaims []*v1beta1.NodeClaim
-	for _, machine := range machines {
-		nodeClaim, err := c.machineToNodeClaim(ctx, machine)
-		if err != nil {
-			return []*v1beta1.NodeClaim{}, err
-		}
-		nodeClaims = append(nodeClaims, nodeClaim)
-	}
-
-	return nodeClaims, nil
-}
-
 // GetInstanceTypes enumerates the known Cluster API scalable resources to generate the list
 // of possible instance types.
 func (c CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.NodePool) ([]*cloudprovider.InstanceType, error) {
@@ -118,9 +101,37 @@ func (c CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.N
 	return instanceTypes, nil
 }
 
+func (c CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
+	return []schema.GroupVersionKind{
+		{
+			Group:   api.SchemeGroupVersion.Group,
+			Version: api.SchemeGroupVersion.Version,
+			Kind:    "ClusterAPINodeClass",
+		},
+	}
+}
+
 // Return nothing since there's no cloud provider drift.
 func (c CloudProvider) IsDrifted(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (cloudprovider.DriftReason, error) {
 	return "", nil
+}
+
+func (c CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
+	machines, err := c.machineProvider.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing machines, %w", err)
+	}
+
+	var nodeClaims []*v1beta1.NodeClaim
+	for _, machine := range machines {
+		nodeClaim, err := c.machineToNodeClaim(ctx, machine)
+		if err != nil {
+			return []*v1beta1.NodeClaim{}, err
+		}
+		nodeClaims = append(nodeClaims, nodeClaim)
+	}
+
+	return nodeClaims, nil
 }
 
 func (c CloudProvider) Name() string {
@@ -145,10 +156,13 @@ func (c CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1
 	// initial price is 0
 	// there is a single offering, and it is available
 	zone := zoneLabelFromLabels(labels)
+	requirements = []*scheduling.Requirement{
+		scheduling.NewRequirement(corev1.LabelTopologyZone, corev1.NodeSelectorOpIn, zone),
+		scheduling.NewRequirement(v1beta1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, v1beta1.CapacityTypeOnDemand),
+	}
 	offerings := cloudprovider.Offerings{
 		cloudprovider.Offering{
-			CapacityType: v1beta1.CapacityTypeOnDemand,
-			Zone:         zone,
+			Requirements: scheduling.NewRequirements(requirements...),
 			Price:        0.0,
 			Available:    true,
 		},

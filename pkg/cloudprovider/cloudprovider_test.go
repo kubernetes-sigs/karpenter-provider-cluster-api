@@ -197,10 +197,13 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
 		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
 		Expect(instanceType.Offerings).To(HaveLen(1))
-		Expect(instanceType.Offerings[0]).To(HaveField("CapacityType", v1beta1.CapacityTypeOnDemand))
-		Expect(instanceType.Offerings[0]).To(HaveField("Zone", ""))
-		Expect(instanceType.Offerings[0]).To(HaveField("Price", 0.0))
-		Expect(instanceType.Offerings[0]).To(HaveField("Available", true))
+		offering := instanceType.Offerings[0]
+		Expect(offering).To(HaveField("Price", 0.0))
+		Expect(offering).To(HaveField("Available", true))
+		Expect(offering.Requirements).Should(HaveKey(v1beta1.CapacityTypeLabelKey))
+		Expect(offering.Requirements[v1beta1.CapacityTypeLabelKey].Values()).Should(ContainElement(v1beta1.CapacityTypeOnDemand))
+		Expect(offering.Requirements).Should(HaveKey(corev1.LabelTopologyZone))
+		Expect(offering.Requirements[corev1.LabelTopologyZone].Values()).Should(ContainElement(""))
 	})
 
 	It("adds the correct zone to offering when the well known zone label is present", func() {
@@ -212,7 +215,9 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		}
 		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
 		Expect(instanceType.Offerings).To(HaveLen(1))
-		Expect(instanceType.Offerings[0]).To(HaveField("Zone", zone))
+		offering := instanceType.Offerings[0]
+		Expect(offering.Requirements).Should(HaveKey(corev1.LabelTopologyZone))
+		Expect(offering.Requirements[corev1.LabelTopologyZone].Values()).Should(ContainElement(zone))
 	})
 })
 

@@ -21,6 +21,7 @@ import (
 
 	"github.com/samber/lo"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
+	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	clusterapi "sigs.k8s.io/karpenter-provider-cluster-api/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
@@ -30,7 +31,7 @@ import (
 )
 
 func init() {
-	v1beta1.RestrictedLabelDomains = v1beta1.RestrictedLabelDomains.Insert(clusterapi.Group)
+	v1beta1.RestrictedLabelDomains = v1beta1.RestrictedLabelDomains.Insert(api.Group)
 	v1beta1.WellKnownLabels = v1beta1.WellKnownLabels.Insert(
 		clusterapi.InstanceSizeLabelKey,
 		clusterapi.InstanceFamilyLabelKey,
