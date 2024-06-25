@@ -18,6 +18,9 @@ package machine
 
 import (
 	"context"
+	"fmt"
+	"math/rand"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,6 +28,68 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
+
+var randsrc *rand.Rand
+
+func init() {
+	randsrc = rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
+var _ = Describe("Machine DefaultProvider.Get method", func() {
+	var provider Provider
+
+	BeforeEach(func() {
+		provider = NewDefaultProvider(context.Background(), cl)
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineList := &capiv1beta1.MachineList{}
+			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineList
+		}).Should(HaveField("Items", HaveLen(0)))
+	})
+
+	It("returns nil when there are no Machines present in API", func() {
+		machine, err := provider.Get(context.Background(), "")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machine).To(BeNil())
+	})
+
+	It("returns nil when there is no Machine with the requested provider ID", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machine, err := provider.Get(context.Background(), "clusterapi://the-wrong-provider-id")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machine).To(BeNil())
+	})
+
+	It("returns the expected Machine when it is present in the API", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+		machine = newMachine("karpenter-2", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		providerID := *machine.Spec.ProviderID
+		machine, err := provider.Get(context.Background(), providerID)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machine).Should(HaveField("Name", "karpenter-2"))
+	})
+
+	It("returns the expected Machine when it is present in the API and not a NodePool member", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+		machine = newMachine("karpenter-2", "karpenter-cluster", false)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		providerID := *machine.Spec.ProviderID
+		machine, err := provider.Get(context.Background(), providerID)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machine).Should(HaveField("Name", "karpenter-2"))
+	})
+})
 
 var _ = Describe("Machine DefaultProvider.List method", func() {
 	var provider Provider
@@ -89,5 +154,7 @@ func newMachine(machineName string, clusterName string, karpenterMember bool) *c
 		machine.SetLabels(labels)
 	}
 	machine.Spec.ClusterName = clusterName
+	providerID := fmt.Sprintf("clusterapi://mock-%d\n", randsrc.Uint32())
+	machine.Spec.ProviderID = &providerID
 	return machine
 }

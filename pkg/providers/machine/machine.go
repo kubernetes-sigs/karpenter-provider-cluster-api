@@ -18,6 +18,7 @@ package machine
 
 import (
 	"context"
+	"fmt"
 
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,6 +26,7 @@ import (
 )
 
 type Provider interface {
+	Get(context.Context, string) (*capiv1beta1.Machine, error)
 	List(context.Context) ([]*capiv1beta1.Machine, error)
 }
 
@@ -38,6 +40,28 @@ func NewDefaultProvider(_ context.Context, kubeClient client.Client) *DefaultPro
 	}
 }
 
+// Get returns the Machine indicated by the supplied Provider ID or nil if not found.
+// Because Get is used with a provider ID, it may return a Machine that does not have
+// a label for node pool membership.
+func (p *DefaultProvider) Get(ctx context.Context, providerID string) (*capiv1beta1.Machine, error) {
+	machineList := &capiv1beta1.MachineList{}
+	err := p.kubeClient.List(ctx, machineList)
+	if err != nil {
+		return nil, fmt.Errorf("unable to list machines during Machine Provider Get request: %w", err)
+	}
+
+	for _, m := range machineList.Items {
+		if m.Spec.ProviderID != nil && *m.Spec.ProviderID == providerID {
+			return &m, nil
+		}
+	}
+
+	return nil, nil
+}
+
+// List returns a slice of Machines that are currently participating with Karpenter.
+// It determines participation by the presence of the node pool member label as defined
+// by the karpenter cluster-api provider.
 func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.Machine, error) {
 	machines := []*capiv1beta1.Machine{}
 
