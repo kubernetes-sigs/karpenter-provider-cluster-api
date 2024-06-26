@@ -28,6 +28,7 @@ import (
 type Provider interface {
 	Get(context.Context, string) (*capiv1beta1.Machine, error)
 	List(context.Context) ([]*capiv1beta1.Machine, error)
+	IsDeleting(*capiv1beta1.Machine) bool
 }
 
 type DefaultProvider struct {
@@ -81,4 +82,9 @@ func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.Machine, err
 	}
 
 	return machines, nil
+}
+
+// IsDeleting returns true if the supplied Machine has a non-zero deletion timestamp.
+func (p *DefaultProvider) IsDeleting(machine *capiv1beta1.Machine) bool {
+	return machine != nil && !machine.GetDeletionTimestamp().IsZero()
 }

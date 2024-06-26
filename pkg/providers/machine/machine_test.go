@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
@@ -34,6 +35,30 @@ var randsrc *rand.Rand
 func init() {
 	randsrc = rand.New(rand.NewSource(time.Now().UnixNano()))
 }
+
+var _ = Describe("Machine DefaultProvider.IsDeleting method", func() {
+	var provider Provider
+
+	BeforeEach(func() {
+		provider = NewDefaultProvider(context.Background(), cl)
+	})
+
+	It("returns false when Machine is nil", func() {
+		Expect(provider.IsDeleting(nil)).To(BeFalse())
+	})
+
+	It("return false when Machine deletion timestamp is zero", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		Expect(provider.IsDeleting(machine)).To(BeFalse())
+	})
+
+	It("return true when Machine deletion timestamp is not zero", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		timestamp := metav1.NewTime(time.Now())
+		machine.SetDeletionTimestamp(&timestamp)
+		Expect(provider.IsDeleting(machine)).To(BeTrue())
+	})
+})
 
 var _ = Describe("Machine DefaultProvider.Get method", func() {
 	var provider Provider
