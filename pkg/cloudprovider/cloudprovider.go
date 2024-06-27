@@ -70,8 +70,26 @@ func (c CloudProvider) Delete(ctx context.Context, nodeClaim *v1beta1.NodeClaim)
 	return fmt.Errorf("not implemented")
 }
 
+// Get returns a NodeClaim for the Machine object with the supplied provider ID, or nil if not found.
 func (c CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.NodeClaim, error) {
-	return nil, fmt.Errorf("not implemented")
+	if len(providerID) == 0 {
+		return nil, fmt.Errorf("no providerID supplied to Get, cannot continue")
+	}
+
+	machine, err := c.machineProvider.Get(ctx, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get Machine from machine provider: %w", err)
+	}
+	if machine == nil {
+		return nil, nil
+	}
+
+	nodeClaim, err := c.machineToNodeClaim(ctx, machine)
+	if err != nil {
+		return nil, fmt.Errorf("unable to convert Machine to NodeClaim in CloudProvider.Get: %w", err)
+	}
+
+	return nodeClaim, nil
 }
 
 // GetInstanceTypes enumerates the known Cluster API scalable resources to generate the list

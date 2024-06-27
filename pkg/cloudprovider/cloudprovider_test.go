@@ -19,6 +19,8 @@ package cloudprovider
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,6 +36,12 @@ import (
 	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
+var randsrc *rand.Rand
+
+func init() {
+	randsrc = rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
 func eventuallyDeleteAllOf(cl client.Client, obj client.Object, ls client.ObjectList) {
 	Expect(cl.DeleteAllOf(context.Background(), obj, client.InNamespace(testNamespace))).To(Succeed())
 	Eventually(func() client.ObjectList {
@@ -41,6 +49,57 @@ func eventuallyDeleteAllOf(cl client.Client, obj client.Object, ls client.Object
 		return ls
 	}).Should(HaveField("Items", HaveLen(0)))
 }
+
+var _ = Describe("CloudProvider.Get method", func() {
+	var provider *CloudProvider
+
+	BeforeEach(func() {
+		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
+		machineDeploymentProvider := machinedeployment.NewDefaultProvider(context.Background(), cl)
+		provider = NewCloudProvider(context.Background(), cl, machineProvider, machineDeploymentProvider)
+	})
+
+	AfterEach(func() {
+		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+	})
+
+	It("returns an error when no provider ID is supplied", func() {
+		nodeClaim, err := provider.Get(context.Background(), "")
+		Expect(err).To(MatchError(fmt.Errorf("no providerID supplied to Get, cannot continue")))
+		Expect(nodeClaim).To(BeNil())
+	})
+
+	It("returns nil when the Machine is not present", func() {
+		nodeClaim, err := provider.Get(context.Background(), "clusterapi://the-wrong-provider-id")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nodeClaim).To(BeNil())
+	})
+
+	It("returns a NodeClaim when the Machine is present", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		annotations := map[string]string{
+			cpuKey:    "4",
+			memoryKey: "16777220Ki",
+		}
+		machineDeployment.SetAnnotations(annotations)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := *machine.Spec.ProviderID
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machine = newMachine("m-2", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim, err := provider.Get(context.Background(), providerID)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nodeClaim).ToNot(BeNil())
+		Expect(nodeClaim.Status).Should(HaveField("ProviderID", providerID))
+	})
+})
 
 var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 	var provider *CloudProvider
@@ -428,6 +487,8 @@ func newMachine(machineName string, clusterName string, karpenterMember bool) *c
 		machine.SetLabels(labels)
 	}
 	machine.Spec.ClusterName = clusterName
+	providerID := fmt.Sprintf("clusterapi://mock-%d\n", randsrc.Uint32())
+	machine.Spec.ProviderID = &providerID
 	return machine
 }
 

@@ -16,12 +16,12 @@ The current focus is on implementing the [Karpenter cloudprovider interface][kci
 
 - [ ] `Create`
 - [ ] `Delete`
-- [ ] `Get`
+- [x] `Get`
 - [x] `List`
 - [x] `GetInstanceTypes`
+- [x] `GetSupportedNodeClasses`
 - [ ] `IsDrifted`
 - [x] `Name`
-- [x] `GetSupportedNodeClasses`
 
 ### Design topics
 
