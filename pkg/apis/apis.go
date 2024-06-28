@@ -19,7 +19,7 @@ package apis
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 
-	clusterv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 )
 
@@ -27,7 +27,7 @@ var (
 	// Builder includes all types within the apis package
 	Builder = runtime.NewSchemeBuilder(
 		v1alpha1.SchemeBuilder.AddToScheme,
-		clusterv1beta1.AddToScheme,
+		capiv1beta1.AddToScheme,
 	)
 	// AddToScheme may be used to add all resources defined in the project to a Scheme
 	AddToScheme = Builder.AddToScheme
