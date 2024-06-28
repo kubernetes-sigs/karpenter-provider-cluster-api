@@ -18,11 +18,14 @@ package operator
 
 import (
 	"context"
-
 	"github.com/samber/lo"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
 	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	clusterapi "sigs.k8s.io/karpenter-provider-cluster-api/pkg/cloudprovider"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/operator/options"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
 	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
@@ -49,8 +52,23 @@ type Operator struct {
 }
 
 func NewOperator(ctx context.Context, operator *operator.Operator) (context.Context, *Operator) {
-	machineProvider := machine.NewDefaultProvider(ctx, operator.GetClient())
-	machineDeploymentProvider := machinedeployment.NewDefaultProvider(ctx, operator.GetClient())
+	clusterAPIKubeConfig, err := clientcmd.BuildConfigFromFlags("", options.FromContext(ctx).ClusterAPIKubeConfigFile)
+	if err != nil {
+		klog.Fatalf("cannot build cluster-api kube config: %v", err)
+	}
+
+	mgmtCluster, err := cluster.New(clusterAPIKubeConfig, func(o *cluster.Options) {
+		o.Scheme = operator.GetScheme()
+	})
+	if err != nil {
+		klog.Fatalf("create cluster-api kube client failed: %v", err)
+	}
+
+	if err = operator.Add(mgmtCluster); err != nil {
+		klog.Fatalf("added cluster-api kube client to operator failed: %v", err)
+	}
+	machineProvider := machine.NewDefaultProvider(ctx, mgmtCluster.GetClient())
+	machineDeploymentProvider := machinedeployment.NewDefaultProvider(ctx, mgmtCluster.GetClient())
 
 	return ctx, &Operator{
 		Operator:                  operator,
