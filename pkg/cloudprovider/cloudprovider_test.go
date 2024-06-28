@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
@@ -49,6 +50,127 @@ func eventuallyDeleteAllOf(cl client.Client, obj client.Object, ls client.Object
 		return ls
 	}).Should(HaveField("Items", HaveLen(0)))
 }
+
+var _ = Describe("CloudProvider.Delete method", func() {
+	var provider *CloudProvider
+
+	BeforeEach(func() {
+		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
+		machineDeploymentProvider := machinedeployment.NewDefaultProvider(context.Background(), cl)
+		provider = NewCloudProvider(context.Background(), cl, machineProvider, machineDeploymentProvider)
+	})
+
+	AfterEach(func() {
+		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+	})
+
+	It("returns an error when the NodeClaim does not have a provider ID", func() {
+		nodeClaim := v1beta1.NodeClaim{}
+		nodeClaim.Name = "some-node-claim"
+		err := provider.Delete(context.Background(), &nodeClaim)
+		Expect(err).To(MatchError(fmt.Errorf("NodeClaim %q does not have a provider ID, cannot delete", nodeClaim.Name)))
+	})
+
+	It("returns an error when the referenced Machine is not found", func() {
+		nodeClaim := v1beta1.NodeClaim{
+			Status: v1beta1.NodeClaimStatus{
+				ProviderID: "clusterapi://some-provider-id",
+			},
+		}
+		nodeClaim.Name = "some-node-claim"
+		err := provider.Delete(context.Background(), &nodeClaim)
+		Expect(err).To(MatchError(fmt.Errorf("unable to find Machine with provider ID %q to Delete NodeClaim %q", nodeClaim.Status.ProviderID, nodeClaim.Name)))
+	})
+
+	It("returns an error when the owner MachineDeployment is not found", func() {
+		mdName := "non-existent-md"
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = mdName
+		providerID := *machine.Spec.ProviderID
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim := v1beta1.NodeClaim{
+			Status: v1beta1.NodeClaimStatus{
+				ProviderID: providerID,
+			},
+		}
+		err := provider.Delete(context.Background(), &nodeClaim)
+		Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("unable to delete NodeClaim %q, cannot find an owner MachineDeployment for Machine %q", nodeClaim.Name, machine.Name))))
+	})
+
+	It("returns an error when the owner MachineDeployment has nil replicas", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := *machine.Spec.ProviderID
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim := v1beta1.NodeClaim{
+			Status: v1beta1.NodeClaimStatus{
+				ProviderID: providerID,
+			},
+		}
+		err := provider.Delete(context.Background(), &nodeClaim)
+		Expect(err).To(MatchError(fmt.Errorf("unable to delete NodeClaim %q, MachineDeployment %q has nil replicas", nodeClaim.Name, machineDeployment.Name)))
+	})
+
+	It("returns an error when the owner MachineDeployment is at zero replicas", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		machineDeployment.Spec.Replicas = ptr.To(int32(0))
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := *machine.Spec.ProviderID
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim := v1beta1.NodeClaim{
+			Status: v1beta1.NodeClaimStatus{
+				ProviderID: providerID,
+			},
+		}
+		err := provider.Delete(context.Background(), &nodeClaim)
+		Expect(err).To(MatchError(fmt.Errorf("unable to delete NodeClaim %q, MachineDeployment %q is already at zero replicas", nodeClaim.Name, machineDeployment.Name)))
+	})
+
+	It("annotates the correct Machine and reduces replicas", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		machineDeployment.Spec.Replicas = ptr.To(int32(2))
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := *machine.Spec.ProviderID
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machine = newMachine("m-2", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim := v1beta1.NodeClaim{
+			Status: v1beta1.NodeClaimStatus{
+				ProviderID: providerID,
+			},
+		}
+		err := provider.Delete(context.Background(), &nodeClaim)
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() map[string]string {
+			m, err := provider.machineProvider.Get(context.Background(), providerID)
+			Expect(err).ToNot(HaveOccurred())
+			return m.GetAnnotations()
+		}).Should(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+
+		Eventually(func() *capiv1beta1.MachineDeployment {
+			md, err := provider.machineDeploymentProvider.Get(context.Background(), machineDeployment.Name, machineDeployment.Namespace)
+			Expect(err).ToNot(HaveOccurred())
+			return md
+		}).Should(HaveField("Spec", HaveField("Replicas", ptr.To(int32(1)))))
+	})
+})
 
 var _ = Describe("CloudProvider.Get method", func() {
 	var provider *CloudProvider
@@ -464,7 +586,7 @@ var _ = Describe("CloudProvider.machineToNodeClaim method", func() {
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
 		Expect(nodeClaim).To(BeNil())
-		Expect(err).To(MatchError(fmt.Errorf("unable to convert Machine %q to a NodeClaim, Machine has no MachineDeployment label %q", "m-1", capiv1beta1.MachineDeploymentNameLabel)))
+		Expect(err).Should(MatchError(ContainSubstring(fmt.Sprintf("unable to convert Machine %q to a NodeClaim, cannot find MachineDeployment:", machine.Name))))
 	})
 
 	It("returns a not found error when the MachineDeployment is not found", func() {

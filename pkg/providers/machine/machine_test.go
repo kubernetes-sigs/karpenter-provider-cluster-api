@@ -169,6 +169,98 @@ var _ = Describe("Machine DefaultProvider.List method", func() {
 	})
 })
 
+var _ = Describe("Machine DefaultProvider.AddDeleteAnnotation method", func() {
+	var provider Provider
+
+	BeforeEach(func() {
+		provider = NewDefaultProvider(context.Background(), cl)
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineList := &capiv1beta1.MachineList{}
+			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineList
+		}).Should(HaveField("Items", HaveLen(0)))
+	})
+
+	It("returns an error when Machine is nil", func() {
+		err := provider.AddDeleteAnnotation(context.Background(), nil)
+		Expect(err).To(MatchError(fmt.Errorf("cannot add deletion annotation to Machine, nil value")))
+	})
+
+	It("returns an error when the Machine does not exist", func() {
+		machine := newMachine("non-existent", "fake-cluster", false)
+		err := provider.AddDeleteAnnotation(context.Background(), machine)
+		Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("unable to add deletion annotation to Machine %q", machine.Name))))
+	})
+
+	It("adds the deletion annotation", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		err := provider.AddDeleteAnnotation(context.Background(), machine)
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() map[string]string {
+			m, err := provider.Get(context.Background(), *machine.Spec.ProviderID)
+			Expect(err).ToNot(HaveOccurred())
+			return m.GetAnnotations()
+		}).Should(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+	})
+})
+
+var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func() {
+	var provider Provider
+
+	BeforeEach(func() {
+		provider = NewDefaultProvider(context.Background(), cl)
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineList := &capiv1beta1.MachineList{}
+			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineList
+		}).Should(HaveField("Items", HaveLen(0)))
+	})
+
+	It("returns an error when Machine is nil", func() {
+		err := provider.RemoveDeleteAnnotation(context.Background(), nil)
+		Expect(err).To(MatchError(fmt.Errorf("cannot remove deletion annotation from Machine, nil value")))
+	})
+
+	It("returns an error when the Machine does not exist", func() {
+		machine := newMachine("non-existent", "fake-cluster", false)
+		annotations := map[string]string{
+			capiv1beta1.DeleteMachineAnnotation: time.Now().String(),
+		}
+		machine.SetAnnotations(annotations)
+		err := provider.RemoveDeleteAnnotation(context.Background(), machine)
+		Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("unable to remove deletion annotation from Machine %q", machine.Name))))
+	})
+
+	It("removes the deletion annotation", func() {
+		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		annotations := map[string]string{
+			capiv1beta1.DeleteMachineAnnotation: time.Now().String(),
+		}
+		machine.SetAnnotations(annotations)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		err := provider.RemoveDeleteAnnotation(context.Background(), machine)
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() map[string]string {
+			m, err := provider.Get(context.Background(), *machine.Spec.ProviderID)
+			Expect(err).ToNot(HaveOccurred())
+			return m.GetAnnotations()
+		}).ShouldNot(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+	})
+})
+
 func newMachine(machineName string, clusterName string, karpenterMember bool) *capiv1beta1.Machine {
 	machine := &capiv1beta1.Machine{}
 	machine.SetName(machineName)
