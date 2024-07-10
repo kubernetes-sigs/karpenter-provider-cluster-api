@@ -18,9 +18,11 @@ package operator
 
 import (
 	"context"
+	"k8s.io/klog/v2"
+
 	"github.com/samber/lo"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog/v2"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
 	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
@@ -52,27 +54,38 @@ type Operator struct {
 }
 
 func NewOperator(ctx context.Context, operator *operator.Operator) (context.Context, *Operator) {
-	clusterAPIKubeConfig, err := clientcmd.BuildConfigFromFlags("", options.FromContext(ctx).ClusterAPIKubeConfigFile)
+	mgmtCluster, err := buildManagementClusterKubeClient(ctx, operator)
 	if err != nil {
-		klog.Fatalf("cannot build cluster-api kube config: %v", err)
+		klog.Fatalf("unable to build management cluster client: %v", err)
 	}
 
-	mgmtCluster, err := cluster.New(clusterAPIKubeConfig, func(o *cluster.Options) {
-		o.Scheme = operator.GetScheme()
-	})
-	if err != nil {
-		klog.Fatalf("create cluster-api kube client failed: %v", err)
-	}
-
-	if err = operator.Add(mgmtCluster); err != nil {
-		klog.Fatalf("added cluster-api kube client to operator failed: %v", err)
-	}
-	machineProvider := machine.NewDefaultProvider(ctx, mgmtCluster.GetClient())
-	machineDeploymentProvider := machinedeployment.NewDefaultProvider(ctx, mgmtCluster.GetClient())
+	machineProvider := machine.NewDefaultProvider(ctx, mgmtCluster)
+	machineDeploymentProvider := machinedeployment.NewDefaultProvider(ctx, mgmtCluster)
 
 	return ctx, &Operator{
 		Operator:                  operator,
 		MachineProvider:           machineProvider,
 		MachineDeploymentProvider: machineDeploymentProvider,
+	}
+}
+
+func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Operator) (client.Client, error) {
+	if options.FromContext(ctx).ClusterAPIKubeConfigFile != "" {
+		clusterAPIKubeConfig, err := clientcmd.BuildConfigFromFlags("", options.FromContext(ctx).ClusterAPIKubeConfigFile)
+		if err != nil {
+			return nil, err
+		}
+		mgmtCluster, err := cluster.New(clusterAPIKubeConfig, func(o *cluster.Options) {
+			o.Scheme = operator.GetScheme()
+		})
+		if err != nil {
+			return nil, err
+		}
+		if err = operator.Add(mgmtCluster); err != nil {
+			return nil, err
+		}
+		return mgmtCluster.GetClient(), nil
+	} else {
+		return operator.GetClient(), nil
 	}
 }
