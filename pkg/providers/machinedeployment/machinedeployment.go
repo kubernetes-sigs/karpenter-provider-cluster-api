@@ -18,6 +18,7 @@ package machinedeployment
 
 import (
 	"context"
+	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -59,11 +60,11 @@ func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelect
 	}
 
 	if selector != nil {
-		s, err := metav1.LabelSelectorAsSelector(selector)
+		sm, err := metav1.LabelSelectorAsMap(selector)
 		if err != nil {
-			return machineDeployments, err
+			return machineDeployments, fmt.Errorf("unable to convert selector in MachineDeployment List: %w", err)
 		}
-		listOptions = append(listOptions, client.MatchingLabelsSelector{s})
+		listOptions = append(listOptions, client.MatchingLabels(sm))
 	}
 	machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
 	err := p.kubeClient.List(ctx, machineDeploymentList, listOptions...)
