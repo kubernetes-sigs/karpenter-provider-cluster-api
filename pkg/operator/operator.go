@@ -18,7 +18,7 @@ package operator
 
 import (
 	"context"
-	"k8s.io/klog/v2"
+	"log"
 
 	"github.com/samber/lo"
 	"k8s.io/client-go/tools/clientcmd"
@@ -56,7 +56,7 @@ type Operator struct {
 func NewOperator(ctx context.Context, operator *operator.Operator) (context.Context, *Operator) {
 	mgmtCluster, err := buildManagementClusterKubeClient(ctx, operator)
 	if err != nil {
-		klog.Fatalf("unable to build management cluster client: %v", err)
+		log.Fatalf("unable to build management cluster client: %v", err)
 	}
 
 	machineProvider := machine.NewDefaultProvider(ctx, mgmtCluster)
@@ -85,7 +85,6 @@ func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Op
 			return nil, err
 		}
 		return mgmtCluster.GetClient(), nil
-	} else {
-		return operator.GetClient(), nil
 	}
+	return operator.GetClient(), nil
 }
