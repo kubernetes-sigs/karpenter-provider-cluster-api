@@ -15,12 +15,12 @@ The current focus is on implementing the [Karpenter cloudprovider interface][kci
 ### cloudprovider interface implementation checklist
 
 - [ ] `Create`
-- [ ] `Delete`
+- [x] `Delete`
 - [x] `Get`
-- [x] `List`
 - [x] `GetInstanceTypes`
 - [x] `GetSupportedNodeClasses`
 - [ ] `IsDrifted`
+- [x] `List`
 - [x] `Name`
 
 ### Design topics

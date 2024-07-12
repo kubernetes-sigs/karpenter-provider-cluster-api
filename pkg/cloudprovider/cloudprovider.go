@@ -21,10 +21,12 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -58,27 +60,84 @@ func NewCloudProvider(ctx context.Context, kubeClient client.Client, machineProv
 
 type CloudProvider struct {
 	kubeClient                client.Client
+	accessLock                sync.Mutex
 	machineProvider           machine.Provider
 	machineDeploymentProvider machinedeployment.Provider
 }
 
-func (c CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c CloudProvider) Delete(ctx context.Context, nodeClaim *v1beta1.NodeClaim) error {
-	return fmt.Errorf("not implemented")
+func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *v1beta1.NodeClaim) error {
+	// to eliminate racing if multiple deletion occur, we gate access to this function
+	c.accessLock.Lock()
+	defer c.accessLock.Unlock()
+
+	if len(nodeClaim.Status.ProviderID) == 0 {
+		return fmt.Errorf("NodeClaim %q does not have a provider ID, cannot delete", nodeClaim.Name)
+	}
+
+	// find machine
+	machine, err := c.machineProvider.Get(ctx, nodeClaim.Status.ProviderID)
+	if err != nil {
+		return fmt.Errorf("error finding Machine with provider ID %q to Delete NodeClaim %q: %w", nodeClaim.Status.ProviderID, nodeClaim.Name, err)
+	}
+	if machine == nil {
+		return fmt.Errorf("unable to find Machine with provider ID %q to Delete NodeClaim %q", nodeClaim.Status.ProviderID, nodeClaim.Name)
+	}
+
+	// check if already deleting
+	if c.machineProvider.IsDeleting(machine) {
+		// Machine is already deleting, we do not need to annotate it or change the scalable resource replicas.
+		return nil
+	}
+
+	// check if reducing replicas goes below zero
+	machineDeployment, err := c.machineDeploymentFromMachine(ctx, machine)
+	if err != nil {
+		return fmt.Errorf("unable to delete NodeClaim %q, cannot find an owner MachineDeployment for Machine %q: %w", nodeClaim.Name, machine.Name, err)
+	}
+
+	if machineDeployment.Spec.Replicas == nil {
+		return fmt.Errorf("unable to delete NodeClaim %q, MachineDeployment %q has nil replicas", nodeClaim.Name, machineDeployment.Name)
+	}
+
+	if *machineDeployment.Spec.Replicas == 0 {
+		return fmt.Errorf("unable to delete NodeClaim %q, MachineDeployment %q is already at zero replicas", nodeClaim.Name, machineDeployment.Name)
+	}
+
+	// mark the machine for deletion before decrementing replicas to protect against the wrong machine being removed
+	err = c.machineProvider.AddDeleteAnnotation(ctx, machine)
+	if err != nil {
+		return fmt.Errorf("unable to delete NodeClaim %q, cannot annotate Machine %q for deletion: %w", nodeClaim.Name, machine.Name, err)
+	}
+
+	//   and reduce machinedeployment replicas
+	updatedReplicas := *machineDeployment.Spec.Replicas - 1
+	machineDeployment.Spec.Replicas = ptr.To(updatedReplicas)
+	err = c.machineDeploymentProvider.Update(ctx, machineDeployment)
+	if err != nil {
+		// cleanup the machine delete annotation so we don't affect future replica changes
+		if err := c.machineProvider.RemoveDeleteAnnotation(ctx, machine); err != nil {
+			return fmt.Errorf("unable to delete NodeClaim %q, cannot remove delete annotation for Machine %q during cleanup: %w", nodeClaim.Name, machine.Name, err)
+		}
+
+		return fmt.Errorf("unable to delete NodeClaim %q, cannot update MachineDeployment %q replicas: %w", nodeClaim.Name, machineDeployment.Name, err)
+	}
+
+	return nil
 }
 
 // Get returns a NodeClaim for the Machine object with the supplied provider ID, or nil if not found.
-func (c CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.NodeClaim, error) {
 	if len(providerID) == 0 {
 		return nil, fmt.Errorf("no providerID supplied to Get, cannot continue")
 	}
 
 	machine, err := c.machineProvider.Get(ctx, providerID)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get Machine from machine provider: %w", err)
+		return nil, fmt.Errorf("unable to find Machine for Get: %w", err)
 	}
 	if machine == nil {
 		return nil, nil
@@ -94,7 +153,7 @@ func (c CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.Nod
 
 // GetInstanceTypes enumerates the known Cluster API scalable resources to generate the list
 // of possible instance types.
-func (c CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.NodePool) ([]*cloudprovider.InstanceType, error) {
+func (c *CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.NodePool) ([]*cloudprovider.InstanceType, error) {
 	instanceTypes := []*cloudprovider.InstanceType{}
 
 	if nodePool == nil {
@@ -119,7 +178,7 @@ func (c CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.N
 	return instanceTypes, nil
 }
 
-func (c CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
+func (c *CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
 	return []schema.GroupVersionKind{
 		{
 			Group:   api.SchemeGroupVersion.Group,
@@ -130,11 +189,11 @@ func (c CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
 }
 
 // Return nothing since there's no cloud provider drift.
-func (c CloudProvider) IsDrifted(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (cloudprovider.DriftReason, error) {
+func (c *CloudProvider) IsDrifted(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (cloudprovider.DriftReason, error) {
 	return "", nil
 }
 
-func (c CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
 	machines, err := c.machineProvider.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing machines, %w", err)
@@ -152,11 +211,25 @@ func (c CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
 	return nodeClaims, nil
 }
 
-func (c CloudProvider) Name() string {
+func (c *CloudProvider) Name() string {
 	return "clusterapi"
 }
 
-func (c CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *cloudprovider.InstanceType {
+func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machine *capiv1beta1.Machine) (*capiv1beta1.MachineDeployment, error) {
+	mdName, found := machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel]
+	if !found {
+		return nil, fmt.Errorf("unable to find MachineDeployment for Machine %q, has no MachineDeployment label %q", machine.GetName(), capiv1beta1.MachineDeploymentNameLabel)
+	}
+
+	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, mdName, machine.GetNamespace())
+	if err != nil {
+		return nil, err
+	}
+
+	return machineDeployment, nil
+}
+
+func (c *CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *cloudprovider.InstanceType {
 	instanceType := &cloudprovider.InstanceType{}
 
 	labels := nodeLabelsFromMachineDeployment(machineDeployment)
@@ -191,7 +264,7 @@ func (c CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1
 	return instanceType
 }
 
-func (c CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*v1beta1.NodeClaim, error) {
 	nodeClaim := v1beta1.NodeClaim{}
 	if machine.Spec.ProviderID != nil {
 		nodeClaim.Status.ProviderID = *machine.Spec.ProviderID
@@ -199,13 +272,9 @@ func (c CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1be
 
 	// we want to get the MachineDeployment that owns this Machine to read the capacity information.
 	// to being this process, we get the MachineDeployment name from the Machine labels.
-	mdName, found := machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel]
-	if !found {
-		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, Machine has no MachineDeployment label %q", machine.GetName(), capiv1beta1.MachineDeploymentNameLabel)
-	}
-	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, mdName, machine.GetNamespace())
+	machineDeployment, err := c.machineDeploymentFromMachine(ctx, machine)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, cannot find MachineDeployment: %w", machine.Name, err)
 	}
 
 	// machine capacity
@@ -213,16 +282,16 @@ func (c CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1be
 	// TODO (elmiko) improve this once upstream has advanced the state of the art for getting capacity,
 	// also add a mechanism to lookup the infra machine template similar to how CAS does it.
 	capacity := capacityResourceListFromAnnotations(machineDeployment.GetAnnotations())
-	_, found = capacity[corev1.ResourceCPU]
+	_, found := capacity[corev1.ResourceCPU]
 	if !found {
 		// if there is no cpu resource we aren't going to get far, return an error
-		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, no cpu capacity found on MachineDeployment %q", machine.GetName(), mdName)
+		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, no cpu capacity found on MachineDeployment %q", machine.GetName(), machineDeployment.Name)
 	}
 
 	_, found = capacity[corev1.ResourceMemory]
 	if !found {
 		// if there is no memory resource we aren't going to get far, return an error
-		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, no memory capacity found on MachineDeployment %q", machine.GetName(), mdName)
+		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, no memory capacity found on MachineDeployment %q", machine.GetName(), machineDeployment.Name)
 	}
 
 	// TODO (elmiko) add labels, and taints
@@ -232,7 +301,7 @@ func (c CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1be
 	return &nodeClaim, nil
 }
 
-func (c CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *v1beta1.NodePool) (*api.ClusterAPINodeClass, error) {
+func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *v1beta1.NodePool) (*api.ClusterAPINodeClass, error) {
 	nodeClass := &api.ClusterAPINodeClass{}
 
 	if nodePool.Spec.Template.Spec.NodeClassRef == nil {

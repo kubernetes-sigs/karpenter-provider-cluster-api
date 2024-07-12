@@ -18,10 +18,12 @@ package machinedeployment
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
@@ -154,6 +156,48 @@ var _ = Describe("MachineDeployment DefaultProvider.List method", func() {
 		machineDeployments, err := provider.List(context.Background(), selector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machineDeployments).To(HaveLen(0))
+	})
+})
+
+var _ = Describe("MachineDeployment DefaultProvider.Update method", func() {
+	var provider Provider
+
+	BeforeEach(func() {
+		provider = NewDefaultProvider(context.Background(), cl)
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineDeploymentList
+		}).Should(HaveField("Items", HaveLen(0)))
+	})
+
+	It("returns an error when the MachineDeployment does not exist", func() {
+		machineDeployment := newMachineDeployment("non-existant", "fake-cluster", true)
+		err := provider.Update(context.Background(), machineDeployment)
+		Expect(err).Should(MatchError(ContainSubstring(fmt.Sprintf("unable to update MachineDeployment %q", machineDeployment.Name))))
+	})
+
+	It("updates the MachineDeployment as expected", func() {
+		machineDeployment := newMachineDeployment("md-1", "karpenter-cluster", true)
+		machineDeployment.Spec.Replicas = ptr.To(int32(0))
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machineDeployment, err := provider.Get(context.Background(), machineDeployment.Name, machineDeployment.Namespace)
+		expectedReplicas := *machineDeployment.Spec.Replicas + 1
+		machineDeployment.Spec.Replicas = ptr.To(expectedReplicas)
+
+		err = provider.Update(context.Background(), machineDeployment)
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() *capiv1beta1.MachineDeployment {
+			md, err := provider.Get(context.Background(), machineDeployment.Name, machineDeployment.Namespace)
+			Expect(err).ToNot(HaveOccurred())
+			return md
+		}).Should(HaveField("Spec", HaveField("Replicas", ptr.To(expectedReplicas))))
 	})
 })
 

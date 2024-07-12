@@ -29,6 +29,7 @@ import (
 type Provider interface {
 	Get(context.Context, string, string) (*capiv1beta1.MachineDeployment, error)
 	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error)
+	Update(context.Context, *capiv1beta1.MachineDeployment) error
 }
 
 type DefaultProvider struct {
@@ -77,4 +78,13 @@ func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelect
 	}
 
 	return machineDeployments, nil
+}
+
+func (p *DefaultProvider) Update(ctx context.Context, machineDeployment *capiv1beta1.MachineDeployment) error {
+	err := p.kubeClient.Update(ctx, machineDeployment)
+	if err != nil {
+		return fmt.Errorf("unable to update MachineDeployment %q: %w", machineDeployment.Name, err)
+	}
+
+	return nil
 }
