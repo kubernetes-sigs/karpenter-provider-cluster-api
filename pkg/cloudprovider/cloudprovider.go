@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"fmt"
 	"strings"
+	"sync"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -59,15 +60,20 @@ func NewCloudProvider(ctx context.Context, kubeClient client.Client, machineProv
 
 type CloudProvider struct {
 	kubeClient                client.Client
+	accessLock                sync.Mutex
 	machineProvider           machine.Provider
 	machineDeploymentProvider machinedeployment.Provider
 }
 
-func (c CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c CloudProvider) Delete(ctx context.Context, nodeClaim *v1beta1.NodeClaim) error {
+func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *v1beta1.NodeClaim) error {
+	// to eliminate racing if multiple deletion occur, we gate access to this function
+	c.accessLock.Lock()
+	defer c.accessLock.Unlock()
+
 	if len(nodeClaim.Status.ProviderID) == 0 {
 		return fmt.Errorf("NodeClaim %q does not have a provider ID, cannot delete", nodeClaim.Name)
 	}
@@ -124,7 +130,7 @@ func (c CloudProvider) Delete(ctx context.Context, nodeClaim *v1beta1.NodeClaim)
 }
 
 // Get returns a NodeClaim for the Machine object with the supplied provider ID, or nil if not found.
-func (c CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.NodeClaim, error) {
 	if len(providerID) == 0 {
 		return nil, fmt.Errorf("no providerID supplied to Get, cannot continue")
 	}
@@ -147,7 +153,7 @@ func (c CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.Nod
 
 // GetInstanceTypes enumerates the known Cluster API scalable resources to generate the list
 // of possible instance types.
-func (c CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.NodePool) ([]*cloudprovider.InstanceType, error) {
+func (c *CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.NodePool) ([]*cloudprovider.InstanceType, error) {
 	instanceTypes := []*cloudprovider.InstanceType{}
 
 	if nodePool == nil {
@@ -172,7 +178,7 @@ func (c CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.N
 	return instanceTypes, nil
 }
 
-func (c CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
+func (c *CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
 	return []schema.GroupVersionKind{
 		{
 			Group:   api.SchemeGroupVersion.Group,
@@ -183,11 +189,11 @@ func (c CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
 }
 
 // Return nothing since there's no cloud provider drift.
-func (c CloudProvider) IsDrifted(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (cloudprovider.DriftReason, error) {
+func (c *CloudProvider) IsDrifted(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (cloudprovider.DriftReason, error) {
 	return "", nil
 }
 
-func (c CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
 	machines, err := c.machineProvider.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing machines, %w", err)
@@ -205,11 +211,11 @@ func (c CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
 	return nodeClaims, nil
 }
 
-func (c CloudProvider) Name() string {
+func (c *CloudProvider) Name() string {
 	return "clusterapi"
 }
 
-func (c CloudProvider) machineDeploymentFromMachine(ctx context.Context, machine *capiv1beta1.Machine) (*capiv1beta1.MachineDeployment, error) {
+func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machine *capiv1beta1.Machine) (*capiv1beta1.MachineDeployment, error) {
 	mdName, found := machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel]
 	if !found {
 		return nil, fmt.Errorf("unable to find MachineDeployment for Machine %q, has no MachineDeployment label %q", machine.GetName(), capiv1beta1.MachineDeploymentNameLabel)
@@ -223,7 +229,7 @@ func (c CloudProvider) machineDeploymentFromMachine(ctx context.Context, machine
 	return machineDeployment, nil
 }
 
-func (c CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *cloudprovider.InstanceType {
+func (c *CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *cloudprovider.InstanceType {
 	instanceType := &cloudprovider.InstanceType{}
 
 	labels := nodeLabelsFromMachineDeployment(machineDeployment)
@@ -258,7 +264,7 @@ func (c CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1
 	return instanceType
 }
 
-func (c CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*v1beta1.NodeClaim, error) {
 	nodeClaim := v1beta1.NodeClaim{}
 	if machine.Spec.ProviderID != nil {
 		nodeClaim.Status.ProviderID = *machine.Spec.ProviderID
@@ -295,7 +301,7 @@ func (c CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1be
 	return &nodeClaim, nil
 }
 
-func (c CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *v1beta1.NodePool) (*api.ClusterAPINodeClass, error) {
+func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *v1beta1.NodePool) (*api.ClusterAPINodeClass, error) {
 	nodeClass := &api.ClusterAPINodeClass{}
 
 	if nodePool.Spec.Template.Spec.NodeClassRef == nil {
