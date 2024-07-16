@@ -66,6 +66,13 @@ type CloudProvider struct {
 }
 
 func (c *CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {
+	// get node class
+	// get instance types from node class
+	// identify which fit requirements
+	//  see reqs.Compatible (karpenter/pkg/scheduling/requirements)
+	//  see resource.Fits (karpenter/pkg/utils/resources)
+	// once scalable resource is identified, increase replicas
+	// fill out nodeclaim with details
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -299,6 +306,31 @@ func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1b
 	nodeClaim.Status.Capacity = capacity
 
 	return &nodeClaim, nil
+}
+
+func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*api.ClusterAPINodeClass, error) {
+	nodeClass := &api.ClusterAPINodeClass{}
+
+	if nodeClaim == nil {
+		return nil, fmt.Errorf("nodeClaim is nil, cannot resolve NodeClass")
+	}
+
+	if nodeClaim.Spec.NodeClassRef == nil {
+		return nil, fmt.Errorf("NodeClass reference is nil for NodeClaim %q, cannot resolve NodeClass", nodeClaim.Name)
+	}
+
+	name := nodeClaim.Spec.NodeClassRef.Name
+	if name == "" {
+		return nil, fmt.Errorf("NodeClass reference name is empty for NodeClaim %q, cannot resolve NodeClass", nodeClaim.Name)
+	}
+
+	// TODO (elmiko) add extra logic to get different resources from the class ref
+	// if the kind and version differ from the included api then we will need to load differently.
+	if err := c.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: nodeClaim.Namespace}, nodeClass); err != nil {
+		return nil, err
+	}
+
+	return nodeClass, nil
 }
 
 func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *v1beta1.NodePool) (*api.ClusterAPINodeClass, error) {

@@ -402,6 +402,62 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 	})
 })
 
+var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
+	var provider *CloudProvider
+
+	BeforeEach(func() {
+		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
+		machineDeploymentProvider := machinedeployment.NewDefaultProvider(context.Background(), cl)
+		provider = NewCloudProvider(context.Background(), cl, machineProvider, machineDeploymentProvider)
+	})
+
+	AfterEach(func() {
+		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+	})
+
+	It("returns an error when no NodeClaim is nil", func() {
+		nodeClass, err := provider.resolveNodeClassFromNodeClaim(context.Background(), nil)
+		Expect(err).To(MatchError(fmt.Errorf("nodeClaim is nil, cannot resolve NodeClass")))
+		Expect(nodeClass).To(BeNil())
+	})
+
+	It("returns an error when no NodeClass reference is found", func() {
+		nodeClaim := v1beta1.NodeClaim{}
+		nodeClaim.Spec.NodeClassRef = nil
+		nodeClaim.Name = "test-pool"
+
+		nodeClass, err := provider.resolveNodeClassFromNodeClaim(context.Background(), &nodeClaim)
+		Expect(err).To(MatchError(fmt.Errorf("NodeClass reference is nil for NodeClaim %q, cannot resolve NodeClass", nodeClaim.Name)))
+		Expect(nodeClass).To(BeNil())
+	})
+
+	It("returns an error when NodeClass name reference is empty", func() {
+		nodeClaim := v1beta1.NodeClaim{}
+		nodeClaim.Spec.NodeClassRef = &v1beta1.NodeClassReference{
+			Name: "",
+		}
+
+		nodeClass, err := provider.resolveNodeClassFromNodeClaim(context.Background(), &nodeClaim)
+		Expect(err).To(MatchError(fmt.Errorf("NodeClass reference name is empty for NodeClaim %q, cannot resolve NodeClass", nodeClaim.Name)))
+		Expect(nodeClass).To(BeNil())
+	})
+
+	It("returns a NodeClass when present", func() {
+		nodeClass := &api.ClusterAPINodeClass{}
+		nodeClass.Name = "default"
+		Expect(cl.Create(context.Background(), nodeClass)).To(Succeed())
+
+		nodeClaim := v1beta1.NodeClaim{}
+		nodeClaim.Spec.NodeClassRef = &v1beta1.NodeClassReference{
+			Name: nodeClass.Name,
+		}
+
+		nodeClass, err := provider.resolveNodeClassFromNodeClaim(context.Background(), &nodeClaim)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(nodeClass).ToNot(BeNil())
+	})
+})
+
 var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
 	var provider *CloudProvider
 
