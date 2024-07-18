@@ -18,11 +18,16 @@ package operator
 
 import (
 	"context"
+	"log"
 
 	"github.com/samber/lo"
+	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
 	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	clusterapi "sigs.k8s.io/karpenter-provider-cluster-api/pkg/cloudprovider"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/operator/options"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
 	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
@@ -49,12 +54,37 @@ type Operator struct {
 }
 
 func NewOperator(ctx context.Context, operator *operator.Operator) (context.Context, *Operator) {
-	machineProvider := machine.NewDefaultProvider(ctx, operator.GetClient())
-	machineDeploymentProvider := machinedeployment.NewDefaultProvider(ctx, operator.GetClient())
+	mgmtCluster, err := buildManagementClusterKubeClient(ctx, operator)
+	if err != nil {
+		log.Fatalf("unable to build management cluster client: %v", err)
+	}
+
+	machineProvider := machine.NewDefaultProvider(ctx, mgmtCluster)
+	machineDeploymentProvider := machinedeployment.NewDefaultProvider(ctx, mgmtCluster)
 
 	return ctx, &Operator{
 		Operator:                  operator,
 		MachineProvider:           machineProvider,
 		MachineDeploymentProvider: machineDeploymentProvider,
 	}
+}
+
+func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Operator) (client.Client, error) {
+	if options.FromContext(ctx).ClusterAPIKubeConfigFile != "" {
+		clusterAPIKubeConfig, err := clientcmd.BuildConfigFromFlags("", options.FromContext(ctx).ClusterAPIKubeConfigFile)
+		if err != nil {
+			return nil, err
+		}
+		mgmtCluster, err := cluster.New(clusterAPIKubeConfig, func(o *cluster.Options) {
+			o.Scheme = operator.GetScheme()
+		})
+		if err != nil {
+			return nil, err
+		}
+		if err = operator.Add(mgmtCluster); err != nil {
+			return nil, err
+		}
+		return mgmtCluster.GetClient(), nil
+	}
+	return operator.GetClient(), nil
 }
