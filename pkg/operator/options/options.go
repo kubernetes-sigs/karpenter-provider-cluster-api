@@ -21,7 +21,7 @@ type Options struct {
 }
 
 func (o *Options) AddFlags(fs *coreoptions.FlagSet) {
-	fs.StringVar(&o.ClusterAPIKubeConfigFile, "cluster-api-kubeconfig", "", "The path to the cluster api manager cluster kubeconfig file.  Empty string for workload cluster config.")
+	fs.StringVar(&o.ClusterAPIKubeConfigFile, "cluster-api-kubeconfig", "", "The path to the cluster api manager cluster kubeconfig file.  Defaults to service account credentials if not specified.")
 }
 
 func (o *Options) Parse(fs *coreoptions.FlagSet, args ...string) error {
