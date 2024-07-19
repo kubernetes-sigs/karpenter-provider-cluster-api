@@ -306,6 +306,26 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 	})
 })
 
+var _ = Describe("CloudProvider.findInstanceTypesForNodeClass method", func() {
+	var provider *CloudProvider
+
+	BeforeEach(func() {
+		machineDeploymentProvider := machinedeployment.NewDefaultProvider(context.Background(), cl)
+		provider = NewCloudProvider(context.Background(), cl, nil, machineDeploymentProvider)
+	})
+
+	AfterEach(func() {
+		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+	})
+
+	It("returns an error when NodeClass is nil", func() {
+		instanceTypes, err := provider.findInstanceTypesForNodeClass(context.Background(), nil)
+		Expect(err).To(MatchError(fmt.Errorf("unable to find instance types for nil NodeClass")))
+		Expect(instanceTypes).To(HaveLen(0))
+	})
+})
+
 var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() {
 	var provider *CloudProvider
 

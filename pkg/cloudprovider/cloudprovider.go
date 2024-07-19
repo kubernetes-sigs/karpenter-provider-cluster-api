@@ -70,11 +70,16 @@ func (c *CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim
 		return nil, fmt.Errorf("cannot satisfy create, NodeClaim is nil")
 	}
 
-	_, err := c.resolveNodeClassFromNodeClaim(ctx, nodeClaim)
+	nodeClass, err := c.resolveNodeClassFromNodeClaim(ctx, nodeClaim)
 	if err != nil {
 		return nil, fmt.Errorf("cannot satisfy create, unable to resolve NodeClass from NodeClaim %q: %w", nodeClaim.Name, err)
 	}
-	// get instance types from node class
+
+	_, err = c.findInstanceTypesForNodeClass(ctx, nodeClass)
+	if err != nil {
+		return nil, fmt.Errorf("cannot satisfy create, unable to get instance types for NodeClass %q of NodeClaim %q: %w", nodeClass.Name, nodeClaim.Name, err)
+	}
+
 	// identify which fit requirements
 	//  see reqs.Compatible (karpenter/pkg/scheduling/requirements)
 	//  see resource.Fits (karpenter/pkg/utils/resources)
@@ -179,14 +184,9 @@ func (c *CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.
 		return instanceTypes, err
 	}
 
-	machineDeployments, err := c.machineDeploymentProvider.List(ctx, nodeClass.Spec.ScalableResourceSelector)
+	instanceTypes, err = c.findInstanceTypesForNodeClass(ctx, nodeClass)
 	if err != nil {
-		return instanceTypes, err
-	}
-
-	for _, md := range machineDeployments {
-		it := c.machineDeploymentToInstanceType(md)
-		instanceTypes = append(instanceTypes, it)
+		return instanceTypes, fmt.Errorf("unable to get instance types for NodePool %q: %w", nodePool.Name, err)
 	}
 
 	return instanceTypes, nil
@@ -241,6 +241,26 @@ func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machin
 	}
 
 	return machineDeployment, nil
+}
+
+func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeClass *api.ClusterAPINodeClass) ([]*cloudprovider.InstanceType, error) {
+	instanceTypes := []*cloudprovider.InstanceType{}
+
+	if nodeClass == nil {
+		return instanceTypes, fmt.Errorf("unable to find instance types for nil NodeClass")
+	}
+
+	machineDeployments, err := c.machineDeploymentProvider.List(ctx, nodeClass.Spec.ScalableResourceSelector)
+	if err != nil {
+		return instanceTypes, err
+	}
+
+	for _, md := range machineDeployments {
+		it := c.machineDeploymentToInstanceType(md)
+		instanceTypes = append(instanceTypes, it)
+	}
+
+	return instanceTypes, nil
 }
 
 func (c *CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *cloudprovider.InstanceType {
