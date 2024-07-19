@@ -319,7 +319,7 @@ func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeC
 	nodeClass := &api.ClusterAPINodeClass{}
 
 	if nodeClaim == nil {
-		return nil, fmt.Errorf("nodeClaim is nil, cannot resolve NodeClass")
+		return nil, fmt.Errorf("NodeClaim is nil, cannot resolve NodeClass")
 	}
 
 	if nodeClaim.Spec.NodeClassRef == nil {
@@ -342,6 +342,10 @@ func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeC
 
 func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *v1beta1.NodePool) (*api.ClusterAPINodeClass, error) {
 	nodeClass := &api.ClusterAPINodeClass{}
+
+	if nodePool == nil {
+		return nil, fmt.Errorf("NodePool is nil, cannot resolve NodeClass")
+	}
 
 	if nodePool.Spec.Template.Spec.NodeClassRef == nil {
 		return nil, fmt.Errorf("node class reference is nil, no way to proceed")

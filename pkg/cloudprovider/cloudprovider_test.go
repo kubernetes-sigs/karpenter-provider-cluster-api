@@ -440,9 +440,9 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
 		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
 	})
 
-	It("returns an error when no NodeClaim is nil", func() {
+	It("returns an error when NodeClaim is nil", func() {
 		nodeClass, err := provider.resolveNodeClassFromNodeClaim(context.Background(), nil)
-		Expect(err).To(MatchError(fmt.Errorf("nodeClaim is nil, cannot resolve NodeClass")))
+		Expect(err).To(MatchError(fmt.Errorf("NodeClaim is nil, cannot resolve NodeClass")))
 		Expect(nodeClass).To(BeNil())
 	})
 
@@ -494,6 +494,12 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
 
 	AfterEach(func() {
 		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+	})
+
+	It("returns an error when NodePool is nil", func() {
+		nodeClass, err := provider.resolveNodeClassFromNodePool(context.Background(), nil)
+		Expect(err).To(MatchError(fmt.Errorf("NodePool is nil, cannot resolve NodeClass")))
+		Expect(nodeClass).To(BeNil())
 	})
 
 	It("returns an error when no NodeClass reference is found", func() {
