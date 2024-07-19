@@ -51,6 +51,31 @@ func eventuallyDeleteAllOf(cl client.Client, obj client.Object, ls client.Object
 	}).Should(HaveField("Items", HaveLen(0)))
 }
 
+var _ = Describe("CloudProvider.Create method", func() {
+	var provider *CloudProvider
+
+	BeforeEach(func() {
+		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
+		machineDeploymentProvider := machinedeployment.NewDefaultProvider(context.Background(), cl)
+		provider = NewCloudProvider(context.Background(), cl, machineProvider, machineDeploymentProvider)
+	})
+
+	AfterEach(func() {
+		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+	})
+
+	It("returns an error when the NodeClaim is nil", func() {
+		nodeClaim, err := provider.Create(context.Background(), nil)
+		Expect(err).To(MatchError(fmt.Errorf("cannot satisfy create, NodeClaim is nil")))
+		Expect(nodeClaim).To(BeNil())
+	})
+
+	It("returns an error when the NodeClass reference is not found", func() {
+	})
+})
+
 var _ = Describe("CloudProvider.Delete method", func() {
 	var provider *CloudProvider
 

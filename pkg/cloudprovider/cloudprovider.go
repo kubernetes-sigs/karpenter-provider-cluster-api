@@ -66,7 +66,14 @@ type CloudProvider struct {
 }
 
 func (c *CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {
-	// get node class
+	if nodeClaim == nil {
+		return nil, fmt.Errorf("cannot satisfy create, NodeClaim is nil")
+	}
+
+	_, err := c.resolveNodeClassFromNodeClaim(ctx, nodeClaim)
+	if err != nil {
+		return nil, fmt.Errorf("cannot satisfy create, unable to resolve NodeClass from NodeClaim %q: %w", nodeClaim.Name, err)
+	}
 	// get instance types from node class
 	// identify which fit requirements
 	//  see reqs.Compatible (karpenter/pkg/scheduling/requirements)
