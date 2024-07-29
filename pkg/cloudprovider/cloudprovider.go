@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -36,6 +37,7 @@ import (
 	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter/pkg/scheduling"
+	"sigs.k8s.io/karpenter/pkg/utils/resources"
 )
 
 const (
@@ -75,14 +77,21 @@ func (c *CloudProvider) Create(ctx context.Context, nodeClaim *karpv1beta1.NodeC
 		return nil, fmt.Errorf("cannot satisfy create, unable to resolve NodeClass from NodeClaim %q: %w", nodeClaim.Name, err)
 	}
 
-	_, err = c.findInstanceTypesForNodeClass(ctx, nodeClass)
+	instanceTypes, err := c.findInstanceTypesForNodeClass(ctx, nodeClass)
 	if err != nil {
 		return nil, fmt.Errorf("cannot satisfy create, unable to get instance types for NodeClass %q of NodeClaim %q: %w", nodeClass.Name, nodeClaim.Name, err)
 	}
 
 	// identify which fit requirements
-	//  see reqs.Compatible (karpenter/pkg/scheduling/requirements)
-	//  see resource.Fits (karpenter/pkg/utils/resources)
+	compatibleInstanceTypes := filterCompatibleInstanceTypes(instanceTypes, nodeClaim)
+	if len(compatibleInstanceTypes) == 0 {
+		return nil, cloudprovider.NewInsufficientCapacityError(fmt.Errorf("cannot satisfy create, no compatible instance types found"))
+	}
+
+	// TODO (elmiko) if multiple instance types are found to be compatible we need to select one.
+	// for now, we sort by resource name and take the first in the list. In the future, this should
+	// be an option or something more useful like minimum size or cost.
+
 	// once scalable resource is identified, increase replicas
 	// fill out nodeclaim with details
 	return nil, fmt.Errorf("not implemented")
@@ -419,6 +428,17 @@ func capacityResourceListFromAnnotations(annotations map[string]string) corev1.R
 	// TODO (elmiko) figure out max pods, is there an official resource name?
 
 	return capacity
+}
+
+func filterCompatibleInstanceTypes(instanceTypes []*cloudprovider.InstanceType, nodeClaim *karpv1beta1.NodeClaim) []*cloudprovider.InstanceType {
+	reqs := scheduling.NewNodeSelectorRequirementsWithMinValues(nodeClaim.Spec.Requirements...)
+	filteredInstances := lo.Filter(instanceTypes, func(i *cloudprovider.InstanceType, _ int) bool {
+		// TODO (elmiko) if/when we have offering availability, this is a good place to filter out unavailable instance types
+		return reqs.Compatible(i.Requirements, scheduling.AllowUndefinedWellKnownLabels) == nil &&
+			resources.Fits(nodeClaim.Spec.Resources.Requests, i.Allocatable())
+	})
+
+	return filteredInstances
 }
 
 func labelsFromScaleFromZeroAnnotation(annotation string) map[string]string {
