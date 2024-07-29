@@ -303,6 +303,7 @@ func (c *CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv
 	}
 
 	instanceType.Offerings = offerings
+	instanceType.Name = machineDeployment.Name
 
 	return instanceType
 }

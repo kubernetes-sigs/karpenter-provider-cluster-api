@@ -346,6 +346,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		Expect(instanceType.Capacity).Should(HaveKeyWithValue(corev1.ResourceCPU, resource.MustParse("1")))
 		Expect(instanceType.Capacity).Should(HaveKeyWithValue(corev1.ResourceMemory, resource.MustParse("16Gi")))
 		Expect(instanceType.Capacity).Should(HaveKeyWithValue(corev1.ResourceName("nvidia.com/gpu"), resource.MustParse("1")))
+		Expect(instanceType.Name).To(Equal(machineDeployment.Name))
 	})
 
 	It("adds nothing to requirements when no managed labels or scale from zero annotations are present", func() {
@@ -354,6 +355,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
 
 		Expect(instanceType.Requirements).To(HaveLen(0))
+		Expect(instanceType.Name).To(Equal(machineDeployment.Name))
 	})
 
 	It("adds labels to the requirements from the Cluster API propagation rules", func() {
@@ -376,6 +378,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		Expect(instanceType.Requirements).Should(HaveKey("prefixed.node-restriction.kubernetes.io/some-other-thing"))
 		Expect(instanceType.Requirements).Should(HaveKey("node.cluster.x-k8s.io/another-thing"))
 		Expect(instanceType.Requirements).Should(HaveKey("prefixed.node.cluster.x-k8s.io/another-thing"))
+		Expect(instanceType.Name).To(Equal(machineDeployment.Name))
 	})
 
 	It("adds labels to the requirements from the scale from zero annotations", func() {
@@ -389,6 +392,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		Expect(instanceType.Requirements).To(HaveLen(2))
 		Expect(instanceType.Requirements).Should(HaveKey(corev1.LabelTopologyZone))
 		Expect(instanceType.Requirements).Should(HaveKey(InstanceSizeLabelKey))
+		Expect(instanceType.Name).To(Equal(machineDeployment.Name))
 	})
 
 	It("adds labels to the requirements from the propagation rules and the scale from zero annotations", func() {
@@ -417,6 +421,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		Expect(instanceType.Requirements).Should(HaveKey("prefixed.node-restriction.kubernetes.io/some-other-thing"))
 		Expect(instanceType.Requirements).Should(HaveKey("node.cluster.x-k8s.io/another-thing"))
 		Expect(instanceType.Requirements).Should(HaveKey("prefixed.node.cluster.x-k8s.io/another-thing"))
+		Expect(instanceType.Name).To(Equal(machineDeployment.Name))
 	})
 
 	It("adds a single available on-demand offering with price 0 and empty zone", func() {
@@ -430,6 +435,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		Expect(offering.Requirements[karpv1beta1.CapacityTypeLabelKey].Values()).Should(ContainElement(karpv1beta1.CapacityTypeOnDemand))
 		Expect(offering.Requirements).Should(HaveKey(corev1.LabelTopologyZone))
 		Expect(offering.Requirements[corev1.LabelTopologyZone].Values()).Should(ContainElement(""))
+		Expect(instanceType.Name).To(Equal(machineDeployment.Name))
 	})
 
 	It("adds the correct zone to offering when the well known zone label is present", func() {
@@ -444,6 +450,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		offering := instanceType.Offerings[0]
 		Expect(offering.Requirements).Should(HaveKey(corev1.LabelTopologyZone))
 		Expect(offering.Requirements[corev1.LabelTopologyZone].Values()).Should(ContainElement(zone))
+		Expect(instanceType.Name).To(Equal(machineDeployment.Name))
 	})
 })
 
