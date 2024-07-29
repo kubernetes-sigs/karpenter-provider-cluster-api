@@ -30,7 +30,7 @@ import (
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
 	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
@@ -195,8 +195,8 @@ func (c *CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *karpv1be
 func (c *CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
 	return []schema.GroupVersionKind{
 		{
-			Group:   api.SchemeGroupVersion.Group,
-			Version: api.SchemeGroupVersion.Version,
+			Group:   v1alpha1.SchemeGroupVersion.Group,
+			Version: v1alpha1.SchemeGroupVersion.Version,
 			Kind:    "ClusterAPINodeClass",
 		},
 	}
@@ -243,7 +243,7 @@ func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machin
 	return machineDeployment, nil
 }
 
-func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeClass *api.ClusterAPINodeClass) ([]*cloudprovider.InstanceType, error) {
+func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeClass *v1alpha1.ClusterAPINodeClass) ([]*cloudprovider.InstanceType, error) {
 	instanceTypes := []*cloudprovider.InstanceType{}
 
 	if nodeClass == nil {
@@ -335,8 +335,8 @@ func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1b
 	return &nodeClaim, nil
 }
 
-func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) (*api.ClusterAPINodeClass, error) {
-	nodeClass := &api.ClusterAPINodeClass{}
+func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) (*v1alpha1.ClusterAPINodeClass, error) {
+	nodeClass := &v1alpha1.ClusterAPINodeClass{}
 
 	if nodeClaim == nil {
 		return nil, fmt.Errorf("NodeClaim is nil, cannot resolve NodeClass")
@@ -360,8 +360,8 @@ func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeC
 	return nodeClass, nil
 }
 
-func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *karpv1beta1.NodePool) (*api.ClusterAPINodeClass, error) {
-	nodeClass := &api.ClusterAPINodeClass{}
+func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *karpv1beta1.NodePool) (*v1alpha1.ClusterAPINodeClass, error) {
+	nodeClass := &v1alpha1.ClusterAPINodeClass{}
 
 	if nodePool == nil {
 		return nil, fmt.Errorf("NodePool is nil, cannot resolve NodeClass")

@@ -30,7 +30,7 @@ import (
 	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
@@ -63,7 +63,7 @@ var _ = Describe("CloudProvider.Create method", func() {
 	AfterEach(func() {
 		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
 		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
-		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
 	})
 
 	It("returns an error when the NodeClaim is nil", func() {
@@ -260,7 +260,7 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 	AfterEach(func() {
 		eventuallyDeleteAllOf(cl, &karpv1beta1.NodePool{}, &karpv1beta1.NodePoolList{})
 		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
-		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
 	})
 
 	It("returns an error when NodePool is not supplied", func() {
@@ -279,7 +279,7 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 	})
 
 	It("returns the expected number of instance types when mixed MachineDeployments are available", func() {
-		nodeClass := &api.ClusterAPINodeClass{}
+		nodeClass := &v1alpha1.ClusterAPINodeClass{}
 		nodeClass.Name = "default"
 		Expect(cl.Create(context.Background(), nodeClass)).To(Succeed())
 
@@ -316,7 +316,7 @@ var _ = Describe("CloudProvider.findInstanceTypesForNodeClass method", func() {
 
 	AfterEach(func() {
 		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
-		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
 	})
 
 	It("returns an error when NodeClass is nil", func() {
@@ -457,7 +457,7 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
 	})
 
 	It("returns an error when NodeClaim is nil", func() {
@@ -488,7 +488,7 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
 	})
 
 	It("returns a NodeClass when present", func() {
-		nodeClass := &api.ClusterAPINodeClass{}
+		nodeClass := &v1alpha1.ClusterAPINodeClass{}
 		nodeClass.Name = "default"
 		Expect(cl.Create(context.Background(), nodeClass)).To(Succeed())
 
@@ -513,7 +513,7 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
+		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
 	})
 
 	It("returns an error when NodePool is nil", func() {
@@ -543,7 +543,7 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
 	})
 
 	It("returns a NodeClass when present", func() {
-		nodeClass := &api.ClusterAPINodeClass{}
+		nodeClass := &v1alpha1.ClusterAPINodeClass{}
 		nodeClass.Name = "default"
 		Expect(cl.Create(context.Background(), nodeClass)).To(Succeed())
 

@@ -17,13 +17,13 @@ limitations under the License.
 package cloudprovider
 
 import (
-	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 )
 
 const (
 	// Labels that can be selected on and are propagated to the node
-	InstanceSizeLabelKey   = api.Group + "/instance-size"
-	InstanceFamilyLabelKey = api.Group + "/instance-family"
-	InstanceMemoryLabelKey = api.Group + "/instance-memory"
-	InstanceCPULabelKey    = api.Group + "/instance-cpu"
+	InstanceSizeLabelKey   = v1alpha1.Group + "/instance-size"
+	InstanceFamilyLabelKey = v1alpha1.Group + "/instance-family"
+	InstanceMemoryLabelKey = v1alpha1.Group + "/instance-memory"
+	InstanceCPULabelKey    = v1alpha1.Group + "/instance-cpu"
 )

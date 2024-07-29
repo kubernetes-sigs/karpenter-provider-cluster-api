@@ -25,7 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
-	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	clusterapi "sigs.k8s.io/karpenter-provider-cluster-api/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/operator/options"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
@@ -36,7 +36,7 @@ import (
 )
 
 func init() {
-	karpv1beta1.RestrictedLabelDomains = karpv1beta1.RestrictedLabelDomains.Insert(api.Group)
+	karpv1beta1.RestrictedLabelDomains = karpv1beta1.RestrictedLabelDomains.Insert(v1alpha1.Group)
 	karpv1beta1.WellKnownLabels = karpv1beta1.WellKnownLabels.Insert(
 		clusterapi.InstanceSizeLabelKey,
 		clusterapi.InstanceFamilyLabelKey,
