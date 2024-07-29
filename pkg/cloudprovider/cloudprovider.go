@@ -33,7 +33,7 @@ import (
 	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
+	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter/pkg/scheduling"
 )
@@ -65,7 +65,7 @@ type CloudProvider struct {
 	machineDeploymentProvider machinedeployment.Provider
 }
 
-func (c *CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) Create(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) (*karpv1beta1.NodeClaim, error) {
 	if nodeClaim == nil {
 		return nil, fmt.Errorf("cannot satisfy create, NodeClaim is nil")
 	}
@@ -88,7 +88,7 @@ func (c *CloudProvider) Create(ctx context.Context, nodeClaim *v1beta1.NodeClaim
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *v1beta1.NodeClaim) error {
+func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) error {
 	// to eliminate racing if multiple deletion occur, we gate access to this function
 	c.accessLock.Lock()
 	defer c.accessLock.Unlock()
@@ -149,7 +149,7 @@ func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *v1beta1.NodeClaim
 }
 
 // Get returns a NodeClaim for the Machine object with the supplied provider ID, or nil if not found.
-func (c *CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) Get(ctx context.Context, providerID string) (*karpv1beta1.NodeClaim, error) {
 	if len(providerID) == 0 {
 		return nil, fmt.Errorf("no providerID supplied to Get, cannot continue")
 	}
@@ -172,7 +172,7 @@ func (c *CloudProvider) Get(ctx context.Context, providerID string) (*v1beta1.No
 
 // GetInstanceTypes enumerates the known Cluster API scalable resources to generate the list
 // of possible instance types.
-func (c *CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *v1beta1.NodePool) ([]*cloudprovider.InstanceType, error) {
+func (c *CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *karpv1beta1.NodePool) ([]*cloudprovider.InstanceType, error) {
 	instanceTypes := []*cloudprovider.InstanceType{}
 
 	if nodePool == nil {
@@ -203,21 +203,21 @@ func (c *CloudProvider) GetSupportedNodeClasses() []schema.GroupVersionKind {
 }
 
 // Return nothing since there's no cloud provider drift.
-func (c *CloudProvider) IsDrifted(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (cloudprovider.DriftReason, error) {
+func (c *CloudProvider) IsDrifted(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) (cloudprovider.DriftReason, error) {
 	return "", nil
 }
 
-func (c *CloudProvider) List(ctx context.Context) ([]*v1beta1.NodeClaim, error) {
+func (c *CloudProvider) List(ctx context.Context) ([]*karpv1beta1.NodeClaim, error) {
 	machines, err := c.machineProvider.List(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("listing machines, %w", err)
 	}
 
-	var nodeClaims []*v1beta1.NodeClaim
+	var nodeClaims []*karpv1beta1.NodeClaim
 	for _, machine := range machines {
 		nodeClaim, err := c.machineToNodeClaim(ctx, machine)
 		if err != nil {
-			return []*v1beta1.NodeClaim{}, err
+			return []*karpv1beta1.NodeClaim{}, err
 		}
 		nodeClaims = append(nodeClaims, nodeClaim)
 	}
@@ -283,7 +283,7 @@ func (c *CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv
 	zone := zoneLabelFromLabels(labels)
 	requirements = []*scheduling.Requirement{
 		scheduling.NewRequirement(corev1.LabelTopologyZone, corev1.NodeSelectorOpIn, zone),
-		scheduling.NewRequirement(v1beta1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, v1beta1.CapacityTypeOnDemand),
+		scheduling.NewRequirement(karpv1beta1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, karpv1beta1.CapacityTypeOnDemand),
 	}
 	offerings := cloudprovider.Offerings{
 		cloudprovider.Offering{
@@ -298,8 +298,8 @@ func (c *CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv
 	return instanceType
 }
 
-func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*v1beta1.NodeClaim, error) {
-	nodeClaim := v1beta1.NodeClaim{}
+func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*karpv1beta1.NodeClaim, error) {
+	nodeClaim := karpv1beta1.NodeClaim{}
 	if machine.Spec.ProviderID != nil {
 		nodeClaim.Status.ProviderID = *machine.Spec.ProviderID
 	}
@@ -335,7 +335,7 @@ func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1b
 	return &nodeClaim, nil
 }
 
-func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeClaim *v1beta1.NodeClaim) (*api.ClusterAPINodeClass, error) {
+func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) (*api.ClusterAPINodeClass, error) {
 	nodeClass := &api.ClusterAPINodeClass{}
 
 	if nodeClaim == nil {
@@ -360,7 +360,7 @@ func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeC
 	return nodeClass, nil
 }
 
-func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *v1beta1.NodePool) (*api.ClusterAPINodeClass, error) {
+func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePool *karpv1beta1.NodePool) (*api.ClusterAPINodeClass, error) {
 	nodeClass := &api.ClusterAPINodeClass{}
 
 	if nodePool == nil {

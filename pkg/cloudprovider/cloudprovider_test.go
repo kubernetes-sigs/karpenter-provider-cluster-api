@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
+	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 var randsrc *rand.Rand
@@ -91,15 +91,15 @@ var _ = Describe("CloudProvider.Delete method", func() {
 	})
 
 	It("returns an error when the NodeClaim does not have a provider ID", func() {
-		nodeClaim := v1beta1.NodeClaim{}
+		nodeClaim := karpv1beta1.NodeClaim{}
 		nodeClaim.Name = "some-node-claim"
 		err := provider.Delete(context.Background(), &nodeClaim)
 		Expect(err).To(MatchError(fmt.Errorf("NodeClaim %q does not have a provider ID, cannot delete", nodeClaim.Name)))
 	})
 
 	It("returns an error when the referenced Machine is not found", func() {
-		nodeClaim := v1beta1.NodeClaim{
-			Status: v1beta1.NodeClaimStatus{
+		nodeClaim := karpv1beta1.NodeClaim{
+			Status: karpv1beta1.NodeClaimStatus{
 				ProviderID: "clusterapi://some-provider-id",
 			},
 		}
@@ -115,8 +115,8 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		providerID := *machine.Spec.ProviderID
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		nodeClaim := v1beta1.NodeClaim{
-			Status: v1beta1.NodeClaimStatus{
+		nodeClaim := karpv1beta1.NodeClaim{
+			Status: karpv1beta1.NodeClaimStatus{
 				ProviderID: providerID,
 			},
 		}
@@ -133,8 +133,8 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		providerID := *machine.Spec.ProviderID
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		nodeClaim := v1beta1.NodeClaim{
-			Status: v1beta1.NodeClaimStatus{
+		nodeClaim := karpv1beta1.NodeClaim{
+			Status: karpv1beta1.NodeClaimStatus{
 				ProviderID: providerID,
 			},
 		}
@@ -152,8 +152,8 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		providerID := *machine.Spec.ProviderID
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		nodeClaim := v1beta1.NodeClaim{
-			Status: v1beta1.NodeClaimStatus{
+		nodeClaim := karpv1beta1.NodeClaim{
+			Status: karpv1beta1.NodeClaimStatus{
 				ProviderID: providerID,
 			},
 		}
@@ -175,8 +175,8 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		nodeClaim := v1beta1.NodeClaim{
-			Status: v1beta1.NodeClaimStatus{
+		nodeClaim := karpv1beta1.NodeClaim{
+			Status: karpv1beta1.NodeClaimStatus{
 				ProviderID: providerID,
 			},
 		}
@@ -258,7 +258,7 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &v1beta1.NodePool{}, &v1beta1.NodePoolList{})
+		eventuallyDeleteAllOf(cl, &karpv1beta1.NodePool{}, &karpv1beta1.NodePoolList{})
 		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
 		eventuallyDeleteAllOf(cl, &api.ClusterAPINodeClass{}, &api.ClusterAPINodeClassList{})
 	})
@@ -270,7 +270,7 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 	})
 
 	It("returns an error when the NodeClass reference is not found", func() {
-		nodePool := v1beta1.NodePool{}
+		nodePool := karpv1beta1.NodePool{}
 		nodePool.Spec.Template.Spec.NodeClassRef = nil
 
 		instanceTypes, err := provider.GetInstanceTypes(context.Background(), &nodePool)
@@ -283,8 +283,8 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 		nodeClass.Name = "default"
 		Expect(cl.Create(context.Background(), nodeClass)).To(Succeed())
 
-		nodePool := v1beta1.NodePool{}
-		nodePool.Spec.Template.Spec.NodeClassRef = &v1beta1.NodeClassReference{
+		nodePool := karpv1beta1.NodePool{}
+		nodePool.Spec.Template.Spec.NodeClassRef = &karpv1beta1.NodeClassReference{
 			Name: nodeClass.Name,
 		}
 
@@ -426,8 +426,8 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 		offering := instanceType.Offerings[0]
 		Expect(offering).To(HaveField("Price", 0.0))
 		Expect(offering).To(HaveField("Available", true))
-		Expect(offering.Requirements).Should(HaveKey(v1beta1.CapacityTypeLabelKey))
-		Expect(offering.Requirements[v1beta1.CapacityTypeLabelKey].Values()).Should(ContainElement(v1beta1.CapacityTypeOnDemand))
+		Expect(offering.Requirements).Should(HaveKey(karpv1beta1.CapacityTypeLabelKey))
+		Expect(offering.Requirements[karpv1beta1.CapacityTypeLabelKey].Values()).Should(ContainElement(karpv1beta1.CapacityTypeOnDemand))
 		Expect(offering.Requirements).Should(HaveKey(corev1.LabelTopologyZone))
 		Expect(offering.Requirements[corev1.LabelTopologyZone].Values()).Should(ContainElement(""))
 	})
@@ -467,7 +467,7 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
 	})
 
 	It("returns an error when no NodeClass reference is found", func() {
-		nodeClaim := v1beta1.NodeClaim{}
+		nodeClaim := karpv1beta1.NodeClaim{}
 		nodeClaim.Spec.NodeClassRef = nil
 		nodeClaim.Name = "test-pool"
 
@@ -477,8 +477,8 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
 	})
 
 	It("returns an error when NodeClass name reference is empty", func() {
-		nodeClaim := v1beta1.NodeClaim{}
-		nodeClaim.Spec.NodeClassRef = &v1beta1.NodeClassReference{
+		nodeClaim := karpv1beta1.NodeClaim{}
+		nodeClaim.Spec.NodeClassRef = &karpv1beta1.NodeClassReference{
 			Name: "",
 		}
 
@@ -492,8 +492,8 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
 		nodeClass.Name = "default"
 		Expect(cl.Create(context.Background(), nodeClass)).To(Succeed())
 
-		nodeClaim := v1beta1.NodeClaim{}
-		nodeClaim.Spec.NodeClassRef = &v1beta1.NodeClassReference{
+		nodeClaim := karpv1beta1.NodeClaim{}
+		nodeClaim.Spec.NodeClassRef = &karpv1beta1.NodeClassReference{
 			Name: nodeClass.Name,
 		}
 
@@ -523,7 +523,7 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
 	})
 
 	It("returns an error when no NodeClass reference is found", func() {
-		nodePool := v1beta1.NodePool{}
+		nodePool := karpv1beta1.NodePool{}
 		nodePool.Spec.Template.Spec.NodeClassRef = nil
 
 		nodeClass, err := provider.resolveNodeClassFromNodePool(context.Background(), &nodePool)
@@ -532,8 +532,8 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
 	})
 
 	It("returns an error when NodeClass name reference is empty", func() {
-		nodePool := v1beta1.NodePool{}
-		nodePool.Spec.Template.Spec.NodeClassRef = &v1beta1.NodeClassReference{
+		nodePool := karpv1beta1.NodePool{}
+		nodePool.Spec.Template.Spec.NodeClassRef = &karpv1beta1.NodeClassReference{
 			Name: "",
 		}
 
@@ -547,8 +547,8 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
 		nodeClass.Name = "default"
 		Expect(cl.Create(context.Background(), nodeClass)).To(Succeed())
 
-		nodePool := v1beta1.NodePool{}
-		nodePool.Spec.Template.Spec.NodeClassRef = &v1beta1.NodeClassReference{
+		nodePool := karpv1beta1.NodePool{}
+		nodePool.Spec.Template.Spec.NodeClassRef = &karpv1beta1.NodeClassReference{
 			Name: nodeClass.Name,
 		}
 
