@@ -421,21 +421,14 @@ func capacityResourceListFromAnnotations(annotations map[string]string) corev1.R
 	return capacity
 }
 
-func nodeLabelsFromMachineDeployment(machineDeployment *capiv1beta1.MachineDeployment) map[string]string {
+func labelsFromScaleFromZeroAnnotation(annotation string) map[string]string {
 	labels := map[string]string{}
 
-	if machineDeployment.Spec.Template.Labels != nil {
-		// get the labels that will be propagated to the node from the machinedeployment
-		// see https://cluster-api.sigs.k8s.io/developer/architecture/controllers/metadata-propagation#metadata-propagation
-		labels = managedNodeLabelsFromLabels(machineDeployment.Spec.Template.Labels)
-	}
-
-	// next we integrate labels from the scale-from-zero annotations, these can override
-	// the propagated labels.
-	// see https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20210310-opt-in-autoscaling-from-zero.md#machineset-and-machinedeployment-annotations
-	if annotation, found := machineDeployment.GetAnnotations()[labelsKey]; found {
-		for k, v := range labelsFromScaleFromZeroAnnotation(annotation) {
-			labels[k] = v
+	labelStrings := strings.Split(annotation, ",")
+	for _, label := range labelStrings {
+		split := strings.SplitN(label, "=", 2)
+		if len(split) == 2 {
+			labels[split[0]] = split[1]
 		}
 	}
 
@@ -460,14 +453,21 @@ func managedNodeLabelsFromLabels(labels map[string]string) map[string]string {
 	return managedLabels
 }
 
-func labelsFromScaleFromZeroAnnotation(annotation string) map[string]string {
+func nodeLabelsFromMachineDeployment(machineDeployment *capiv1beta1.MachineDeployment) map[string]string {
 	labels := map[string]string{}
 
-	labelStrings := strings.Split(annotation, ",")
-	for _, label := range labelStrings {
-		split := strings.SplitN(label, "=", 2)
-		if len(split) == 2 {
-			labels[split[0]] = split[1]
+	if machineDeployment.Spec.Template.Labels != nil {
+		// get the labels that will be propagated to the node from the machinedeployment
+		// see https://cluster-api.sigs.k8s.io/developer/architecture/controllers/metadata-propagation#metadata-propagation
+		labels = managedNodeLabelsFromLabels(machineDeployment.Spec.Template.Labels)
+	}
+
+	// next we integrate labels from the scale-from-zero annotations, these can override
+	// the propagated labels.
+	// see https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20210310-opt-in-autoscaling-from-zero.md#machineset-and-machinedeployment-annotations
+	if annotation, found := machineDeployment.GetAnnotations()[labelsKey]; found {
+		for k, v := range labelsFromScaleFromZeroAnnotation(annotation) {
+			labels[k] = v
 		}
 	}
 
