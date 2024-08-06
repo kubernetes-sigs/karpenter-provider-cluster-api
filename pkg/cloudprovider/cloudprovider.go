@@ -26,12 +26,14 @@ import (
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
 	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
@@ -217,7 +219,16 @@ func (c *CloudProvider) IsDrifted(ctx context.Context, nodeClaim *karpv1beta1.No
 }
 
 func (c *CloudProvider) List(ctx context.Context) ([]*karpv1beta1.NodeClaim, error) {
-	machines, err := c.machineProvider.List(ctx)
+	// select all machines that have the nodepool membership label, this should be all the machines that are registered as nodes
+	selector := metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      providers.NodePoolMemberLabel,
+				Operator: metav1.LabelSelectorOpExists,
+			},
+		},
+	}
+	machines, err := c.machineProvider.List(ctx, &selector)
 	if err != nil {
 		return nil, fmt.Errorf("listing machines, %w", err)
 	}
