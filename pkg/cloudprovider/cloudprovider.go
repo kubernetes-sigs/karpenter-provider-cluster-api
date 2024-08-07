@@ -507,7 +507,10 @@ func capacityResourceListFromAnnotations(annotations map[string]string) corev1.R
 		capacity[corev1.ResourceEphemeralStorage] = resource.MustParse(ephStorage)
 	}
 
-	// TODO (elmiko) figure out max pods, is there an official resource name?
+	maxPods, found := annotations[maxPodsKey]
+	if found {
+		capacity[corev1.ResourcePods] = resource.MustParse(maxPods)
+	}
 
 	return capacity
 }
