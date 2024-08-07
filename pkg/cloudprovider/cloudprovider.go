@@ -584,6 +584,10 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 	// to the v1.LabelInstanceTypeStable. if karpenter expects this to match the node, then we need to get this value through capi.
 	instanceType.Name = machineDeployment.Name
 
+	// TODO (elmiko) add the proper overhead information, not sure where we will harvest this information.
+	// perhaps it needs to be a configurable option somewhere.
+	instanceType.Overhead = &cloudprovider.InstanceTypeOverhead{}
+
 	// record the information from the MachineDeployment so we can find it again later.
 	instanceType.MachineDeploymentName = machineDeployment.Name
 	instanceType.MachineDeploymentNamespace = machineDeployment.Namespace
