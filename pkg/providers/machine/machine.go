@@ -32,6 +32,7 @@ type Provider interface {
 	IsDeleting(*capiv1beta1.Machine) bool
 	AddDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
 	RemoveDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
+	Update(context.Context, *capiv1beta1.Machine) error
 }
 
 type DefaultProvider struct {
@@ -74,12 +75,7 @@ func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelect
 		}
 		listOptions = append(listOptions, &client.ListOptions{LabelSelector: sm})
 	}
-	/*
-			client.MatchingLabels{
-				providers.NodePoolMemberLabel: "",
-			},
-		}
-	*/
+
 	machineList := &capiv1beta1.MachineList{}
 	err := p.kubeClient.List(ctx, machineList, listOptions...)
 	if err != nil {
@@ -141,6 +137,15 @@ func (p *DefaultProvider) RemoveDeleteAnnotation(ctx context.Context, machine *c
 		if err != nil {
 			return fmt.Errorf("unable to remove deletion annotation from Machine %q: %w", machine.Name, err)
 		}
+	}
+
+	return nil
+}
+
+func (p *DefaultProvider) Update(ctx context.Context, machine *capiv1beta1.Machine) error {
+	err := p.kubeClient.Update(ctx, machine)
+	if err != nil {
+		return fmt.Errorf("unable to update Machine%q: %w", machine.Name, err)
 	}
 
 	return nil
