@@ -326,13 +326,7 @@ var _ = Describe("CloudProvider.findInstanceTypesForNodeClass method", func() {
 	})
 })
 
-var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() {
-	var provider *CloudProvider
-
-	BeforeEach(func() {
-		provider = NewCloudProvider(context.Background(), cl, nil, nil)
-	})
-
+var _ = Describe("machineDeploymentToInstanceType function", func() {
 	It("adds capacity resources from scale from zero annotations", func() {
 		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
 		machineDeployment.Annotations = map[string]string{
@@ -342,7 +336,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 			gpuTypeKey:  "nvidia.com/gpu",
 		}
 
-		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
+		instanceType := machineDeploymentToInstanceType(machineDeployment)
 		Expect(instanceType.Capacity).Should(HaveKeyWithValue(corev1.ResourceCPU, resource.MustParse("1")))
 		Expect(instanceType.Capacity).Should(HaveKeyWithValue(corev1.ResourceMemory, resource.MustParse("16Gi")))
 		Expect(instanceType.Capacity).Should(HaveKeyWithValue(corev1.ResourceName("nvidia.com/gpu"), resource.MustParse("1")))
@@ -352,7 +346,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 	It("adds nothing to requirements when no managed labels or scale from zero annotations are present", func() {
 		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
 		machineDeployment.Spec.Template.Labels = map[string]string{}
-		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
+		instanceType := machineDeploymentToInstanceType(machineDeployment)
 
 		Expect(instanceType.Requirements).To(HaveLen(0))
 		Expect(instanceType.Name).To(Equal(machineDeployment.Name))
@@ -371,7 +365,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 			"prefixed.node-role.kubernetes.io/no-propagate": "special-role",
 		}
 
-		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
+		instanceType := machineDeploymentToInstanceType(machineDeployment)
 		Expect(instanceType.Requirements).To(HaveLen(5))
 		Expect(instanceType.Requirements).Should(HaveKey(providers.NodePoolMemberLabel))
 		Expect(instanceType.Requirements).Should(HaveKey("node-restriction.kubernetes.io/some-thing"))
@@ -388,7 +382,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 			"some-other-label": "stuff!",
 		}
 
-		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
+		instanceType := machineDeploymentToInstanceType(machineDeployment)
 		Expect(instanceType.Requirements).To(HaveLen(2))
 		Expect(instanceType.Requirements).Should(HaveKey(corev1.LabelTopologyZone))
 		Expect(instanceType.Requirements).Should(HaveKey(InstanceSizeLabelKey))
@@ -412,7 +406,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 			"prefixed.node-role.kubernetes.io/no-propagate": "special-role",
 		}
 
-		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
+		instanceType := machineDeploymentToInstanceType(machineDeployment)
 		Expect(instanceType.Requirements).To(HaveLen(7))
 		Expect(instanceType.Requirements).Should(HaveKey(corev1.LabelTopologyZone))
 		Expect(instanceType.Requirements).Should(HaveKey(InstanceSizeLabelKey))
@@ -426,7 +420,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 
 	It("adds a single available on-demand offering with price 0 and empty zone", func() {
 		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
-		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
+		instanceType := machineDeploymentToInstanceType(machineDeployment)
 		Expect(instanceType.Offerings).To(HaveLen(1))
 		offering := instanceType.Offerings[0]
 		Expect(offering).To(HaveField("Price", 0.0))
@@ -445,7 +439,7 @@ var _ = Describe("CloudProvider.machineDeploymentToInstanceType method", func() 
 			// we need to add the zone label to the scale from zero annotations due to the capi metadata propagation rules
 			labelsKey: fmt.Sprintf("%s=%s", corev1.LabelTopologyZone, zone),
 		}
-		instanceType := provider.machineDeploymentToInstanceType(machineDeployment)
+		instanceType := machineDeploymentToInstanceType(machineDeployment)
 		Expect(instanceType.Offerings).To(HaveLen(1))
 		offering := instanceType.Offerings[0]
 		Expect(offering.Requirements).Should(HaveKey(corev1.LabelTopologyZone))

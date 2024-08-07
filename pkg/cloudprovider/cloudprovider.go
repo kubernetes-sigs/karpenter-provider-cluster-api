@@ -17,17 +17,21 @@ limitations under the License.
 package cloudprovider
 
 import (
+	"cmp"
 	"context"
 	_ "embed"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -62,6 +66,13 @@ func NewCloudProvider(ctx context.Context, kubeClient client.Client, machineProv
 	}
 }
 
+type ClusterAPIInstanceType struct {
+	cloudprovider.InstanceType
+
+	MachineDeploymentName      string
+	MachineDeploymentNamespace string
+}
+
 type CloudProvider struct {
 	kubeClient                client.Client
 	accessLock                sync.Mutex
@@ -93,10 +104,55 @@ func (c *CloudProvider) Create(ctx context.Context, nodeClaim *karpv1beta1.NodeC
 	// TODO (elmiko) if multiple instance types are found to be compatible we need to select one.
 	// for now, we sort by resource name and take the first in the list. In the future, this should
 	// be an option or something more useful like minimum size or cost.
+	slices.SortFunc(compatibleInstanceTypes, func(a, b *ClusterAPIInstanceType) int {
+		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+	selectedInstanceType := compatibleInstanceTypes[0]
 
 	// once scalable resource is identified, increase replicas
-	// fill out nodeclaim with details
-	return nil, fmt.Errorf("not implemented")
+	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, selectedInstanceType.MachineDeploymentName, selectedInstanceType.MachineDeploymentNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("cannot satisfy create, unable to find MachineDeployment %q for InstanceType %q: %w", selectedInstanceType.MachineDeploymentName, selectedInstanceType.Name, err)
+	}
+	originalReplicas := *machineDeployment.Spec.Replicas
+	machineDeployment.Spec.Replicas = ptr.To(originalReplicas + 1)
+	if err := c.machineDeploymentProvider.Update(ctx, machineDeployment); err != nil {
+		return nil, fmt.Errorf("cannot satisfy create, unable to update MachineDeployment %q replicas: %w", machineDeployment.Name, err)
+	}
+
+	// TODO (elmiko) it would be nice to have a more elegant solution to the asynchronous machine creation.
+	// Initially, it appeared that we could have a Machine controller which could reconcile new Machines and
+	// then associate them with NodeClaims by using a sentinel value for the Provider ID. But, this may not
+	// work as we expect since the karpenter core can use the Provider ID as a key into one of its internal caches.
+	// For now, the method of waiting for the Machine seemed straightforward although it does make the `Create` method a blocking call.
+	// Try to find an unclaimed Machine resource for 1 minute.
+	machine, err := c.pollForUnclaimedMachineInMachineDeploymentWithTimeout(ctx, machineDeployment, time.Minute)
+	if err != nil {
+		// unable to find a Machine for the NodeClaim, this could be due to timeout or error, but the replica count needs to be reset.
+		// TODO (elmiko) this could probably use improvement to make it more resilient to errors.
+		machineDeployment.Spec.Replicas = ptr.To(originalReplicas)
+		if err := c.machineDeploymentProvider.Update(ctx, machineDeployment); err != nil {
+			return nil, fmt.Errorf("cannot satisfy create, error while recovering from failure to find an unclaimed Machine: %w", err)
+		}
+		return nil, fmt.Errorf("cannot satisfy create, unable to find an unclaimed Machine for MachineDeployment %q: %w", machineDeployment.Name, err)
+	}
+
+	// now that we have a Machine for the NodeClaim, we label it as a karpenter member
+	labels := machine.GetLabels()
+	labels[providers.NodePoolMemberLabel] = ""
+	machine.SetLabels(labels)
+	if err := c.machineProvider.Update(ctx, machine); err != nil {
+		// if we can't update the Machine with the member label, we need to unwind the addition
+		// TODO (elmiko) add more logic here to fix the error, if we are in this state it's not clear how to fix,
+		// since we have a Machine, we should be reducing the replicas and annotating the Machine for deletion.
+		return nil, fmt.Errorf("cannot satisfy create, unable to label Machine %q as a member: %w", machine.Name, err)
+	}
+
+	//  fill out nodeclaim with details
+	createdNodeClaim := createNodeClaimFromMachineDeployment(machineDeployment)
+	createdNodeClaim.Status.ProviderID = *machine.Spec.ProviderID
+
+	return createdNodeClaim, nil
 }
 
 func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) error {
@@ -184,22 +240,30 @@ func (c *CloudProvider) Get(ctx context.Context, providerID string) (*karpv1beta
 // GetInstanceTypes enumerates the known Cluster API scalable resources to generate the list
 // of possible instance types.
 func (c *CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *karpv1beta1.NodePool) ([]*cloudprovider.InstanceType, error) {
-	instanceTypes := []*cloudprovider.InstanceType{}
 
 	if nodePool == nil {
-		return instanceTypes, fmt.Errorf("node pool reference is nil, no way to proceed")
+		return nil, fmt.Errorf("node pool reference is nil, no way to proceed")
 	}
 
 	nodeClass, err := c.resolveNodeClassFromNodePool(ctx, nodePool)
 	if err != nil {
-		return instanceTypes, err
+		return nil, err
 	}
 
-	instanceTypes, err = c.findInstanceTypesForNodeClass(ctx, nodeClass)
+	capiInstanceTypes, err := c.findInstanceTypesForNodeClass(ctx, nodeClass)
 	if err != nil {
-		return instanceTypes, fmt.Errorf("unable to get instance types for NodePool %q: %w", nodePool.Name, err)
+		return nil, fmt.Errorf("unable to get instance types for NodePool %q: %w", nodePool.Name, err)
 	}
 
+	instanceTypes := lo.Map(capiInstanceTypes, func(i *ClusterAPIInstanceType, _ int) *cloudprovider.InstanceType {
+		return &cloudprovider.InstanceType{
+			Name:         i.Name,
+			Requirements: i.Requirements,
+			Offerings:    i.Offerings,
+			Capacity:     i.Capacity,
+			Overhead:     i.Overhead,
+		}
+	})
 	return instanceTypes, nil
 }
 
@@ -263,8 +327,8 @@ func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machin
 	return machineDeployment, nil
 }
 
-func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeClass *v1alpha1.ClusterAPINodeClass) ([]*cloudprovider.InstanceType, error) {
-	instanceTypes := []*cloudprovider.InstanceType{}
+func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeClass *v1alpha1.ClusterAPINodeClass) ([]*ClusterAPIInstanceType, error) {
+	instanceTypes := []*ClusterAPIInstanceType{}
 
 	if nodeClass == nil {
 		return instanceTypes, fmt.Errorf("unable to find instance types for nil NodeClass")
@@ -276,47 +340,11 @@ func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeC
 	}
 
 	for _, md := range machineDeployments {
-		it := c.machineDeploymentToInstanceType(md)
+		it := machineDeploymentToInstanceType(md)
 		instanceTypes = append(instanceTypes, it)
 	}
 
 	return instanceTypes, nil
-}
-
-func (c *CloudProvider) machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *cloudprovider.InstanceType {
-	instanceType := &cloudprovider.InstanceType{}
-
-	labels := nodeLabelsFromMachineDeployment(machineDeployment)
-	requirements := []*scheduling.Requirement{}
-	for k, v := range labels {
-		requirements = append(requirements, scheduling.NewRequirement(k, corev1.NodeSelectorOpIn, v))
-	}
-	instanceType.Requirements = scheduling.NewRequirements(requirements...)
-
-	capacity := capacityResourceListFromAnnotations(machineDeployment.GetAnnotations())
-	instanceType.Capacity = capacity
-
-	// TODO (elmiko) add offerings info, TBD of where this would come from
-	// start with zone, read from the label and add to offering
-	// initial price is 0
-	// there is a single offering, and it is available
-	zone := zoneLabelFromLabels(labels)
-	requirements = []*scheduling.Requirement{
-		scheduling.NewRequirement(corev1.LabelTopologyZone, corev1.NodeSelectorOpIn, zone),
-		scheduling.NewRequirement(karpv1beta1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, karpv1beta1.CapacityTypeOnDemand),
-	}
-	offerings := cloudprovider.Offerings{
-		cloudprovider.Offering{
-			Requirements: scheduling.NewRequirements(requirements...),
-			Price:        0.0,
-			Available:    true,
-		},
-	}
-
-	instanceType.Offerings = offerings
-	instanceType.Name = machineDeployment.Name
-
-	return instanceType
 }
 
 func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*karpv1beta1.NodeClaim, error) {
@@ -356,6 +384,47 @@ func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1b
 	return &nodeClaim, nil
 }
 
+func (c *CloudProvider) pollForUnclaimedMachineInMachineDeploymentWithTimeout(ctx context.Context, machineDeployment *capiv1beta1.MachineDeployment, timeout time.Duration) (*capiv1beta1.Machine, error) {
+	var machine *capiv1beta1.Machine
+
+	// select all Machines that have the ownership label for the MachineDeployment, and do not have the
+	// label for karpenter node pool membership.
+	selector := &metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      providers.NodePoolMemberLabel,
+				Operator: metav1.LabelSelectorOpDoesNotExist,
+			},
+			{
+				Key:      capiv1beta1.MachineDeploymentNameLabel,
+				Operator: metav1.LabelSelectorOpIn,
+				Values:   []string{machineDeployment.Name},
+			},
+		},
+	}
+
+	err := wait.PollUntilContextTimeout(ctx, time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+		machineList, err := c.machineProvider.List(ctx, selector)
+		if err != nil {
+			// this might need to ignore the error for the sake of the timeout
+			return false, fmt.Errorf("error listing unclaimed Machines for MachineDeployment %q: %w", machineDeployment.Name, err)
+		}
+		if len(machineList) == 0 {
+			return false, nil
+		}
+
+		// take the first Machine from the list
+		machine = machineList[0]
+
+		return true, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error polling for an unclaimed Machine in MachineDeployment %q: %w", machineDeployment.Name, err)
+	}
+
+	return machine, nil
+}
+
 func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) (*v1alpha1.ClusterAPINodeClass, error) {
 	nodeClass := &v1alpha1.ClusterAPINodeClass{}
 
@@ -374,6 +443,7 @@ func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeC
 
 	// TODO (elmiko) add extra logic to get different resources from the class ref
 	// if the kind and version differ from the included api then we will need to load differently.
+	// NodeClass and NodeClaim are not namespace scoped, this call can probably be changed.
 	if err := c.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: nodeClaim.Namespace}, nodeClass); err != nil {
 		return nil, err
 	}
@@ -442,9 +512,21 @@ func capacityResourceListFromAnnotations(annotations map[string]string) corev1.R
 	return capacity
 }
 
-func filterCompatibleInstanceTypes(instanceTypes []*cloudprovider.InstanceType, nodeClaim *karpv1beta1.NodeClaim) []*cloudprovider.InstanceType {
+func createNodeClaimFromMachineDeployment(machineDeployment *capiv1beta1.MachineDeployment) *karpv1beta1.NodeClaim {
+	nodeClaim := &karpv1beta1.NodeClaim{}
+
+	instanceType := machineDeploymentToInstanceType(machineDeployment)
+	nodeClaim.Status.Capacity = instanceType.Capacity
+	nodeClaim.Status.Allocatable = instanceType.Allocatable()
+
+	// TODO (elmiko) we might need to also convey the labels and annotations on to the NodeClaim
+
+	return nodeClaim
+}
+
+func filterCompatibleInstanceTypes(instanceTypes []*ClusterAPIInstanceType, nodeClaim *karpv1beta1.NodeClaim) []*ClusterAPIInstanceType {
 	reqs := scheduling.NewNodeSelectorRequirementsWithMinValues(nodeClaim.Spec.Requirements...)
-	filteredInstances := lo.Filter(instanceTypes, func(i *cloudprovider.InstanceType, _ int) bool {
+	filteredInstances := lo.Filter(instanceTypes, func(i *ClusterAPIInstanceType, _ int) bool {
 		// TODO (elmiko) if/when we have offering availability, this is a good place to filter out unavailable instance types
 		return reqs.Compatible(i.Requirements, scheduling.AllowUndefinedWellKnownLabels) == nil &&
 			resources.Fits(nodeClaim.Spec.Resources.Requests, i.Allocatable())
@@ -465,6 +547,48 @@ func labelsFromScaleFromZeroAnnotation(annotation string) map[string]string {
 	}
 
 	return labels
+}
+
+func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *ClusterAPIInstanceType {
+	instanceType := &ClusterAPIInstanceType{}
+
+	labels := nodeLabelsFromMachineDeployment(machineDeployment)
+	requirements := []*scheduling.Requirement{}
+	for k, v := range labels {
+		requirements = append(requirements, scheduling.NewRequirement(k, corev1.NodeSelectorOpIn, v))
+	}
+	instanceType.Requirements = scheduling.NewRequirements(requirements...)
+
+	capacity := capacityResourceListFromAnnotations(machineDeployment.GetAnnotations())
+	instanceType.Capacity = capacity
+
+	// TODO (elmiko) add offerings info, TBD of where this would come from
+	// start with zone, read from the label and add to offering
+	// initial price is 0
+	// there is a single offering, and it is available
+	zone := zoneLabelFromLabels(labels)
+	requirements = []*scheduling.Requirement{
+		scheduling.NewRequirement(corev1.LabelTopologyZone, corev1.NodeSelectorOpIn, zone),
+		scheduling.NewRequirement(karpv1beta1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, karpv1beta1.CapacityTypeOnDemand),
+	}
+	offerings := cloudprovider.Offerings{
+		cloudprovider.Offering{
+			Requirements: scheduling.NewRequirements(requirements...),
+			Price:        0.0,
+			Available:    true,
+		},
+	}
+
+	instanceType.Offerings = offerings
+	// TODO (elmiko) this may not be correct given the code comment in the InstanceType struct about the name corresponding
+	// to the v1.LabelInstanceTypeStable. if karpenter expects this to match the node, then we need to get this value through capi.
+	instanceType.Name = machineDeployment.Name
+
+	// record the information from the MachineDeployment so we can find it again later.
+	instanceType.MachineDeploymentName = machineDeployment.Name
+	instanceType.MachineDeploymentNamespace = machineDeployment.Namespace
+
+	return instanceType
 }
 
 func managedNodeLabelsFromLabels(labels map[string]string) map[string]string {
