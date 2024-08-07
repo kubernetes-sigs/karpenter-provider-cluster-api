@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"os"
 
-	coreoptions "sigs.k8s.io/karpenter/pkg/operator/options"
+	karpoptions "sigs.k8s.io/karpenter/pkg/operator/options"
 )
 
 func init() {
-	coreoptions.Injectables = append(coreoptions.Injectables, &Options{})
+	karpoptions.Injectables = append(karpoptions.Injectables, &Options{})
 }
 
 type optionsKey struct{}
@@ -20,11 +20,11 @@ type Options struct {
 	ClusterAPIKubeConfigFile string
 }
 
-func (o *Options) AddFlags(fs *coreoptions.FlagSet) {
+func (o *Options) AddFlags(fs *karpoptions.FlagSet) {
 	fs.StringVar(&o.ClusterAPIKubeConfigFile, "cluster-api-kubeconfig", "", "The path to the cluster api manager cluster kubeconfig file.  Defaults to service account credentials if not specified.")
 }
 
-func (o *Options) Parse(fs *coreoptions.FlagSet, args ...string) error {
+func (o *Options) Parse(fs *karpoptions.FlagSet, args ...string) error {
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			os.Exit(0)

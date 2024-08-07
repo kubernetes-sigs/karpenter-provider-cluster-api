@@ -9,12 +9,13 @@ owned cluster.
 
 ## Status
 
-This project is under active development and is in an experimental state.
+This project is under active development and is in an experimental state. It is
+not intended for production use, yet...
 The current focus is on implementing the [Karpenter cloudprovider interface][kci].
 
 ### cloudprovider interface implementation checklist
 
-- [ ] `Create`
+- [x] `Create`
 - [x] `Delete`
 - [x] `Get`
 - [x] `GetInstanceTypes`

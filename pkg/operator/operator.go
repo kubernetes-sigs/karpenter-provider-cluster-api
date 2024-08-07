@@ -25,19 +25,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
-	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	clusterapi "sigs.k8s.io/karpenter-provider-cluster-api/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/operator/options"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
+	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 	"sigs.k8s.io/karpenter/pkg/operator"
 	"sigs.k8s.io/karpenter/pkg/operator/scheme"
 )
 
 func init() {
-	v1beta1.RestrictedLabelDomains = v1beta1.RestrictedLabelDomains.Insert(api.Group)
-	v1beta1.WellKnownLabels = v1beta1.WellKnownLabels.Insert(
+	karpv1beta1.RestrictedLabelDomains = karpv1beta1.RestrictedLabelDomains.Insert(v1alpha1.Group)
+	karpv1beta1.WellKnownLabels = karpv1beta1.WellKnownLabels.Insert(
 		clusterapi.InstanceSizeLabelKey,
 		clusterapi.InstanceFamilyLabelKey,
 		clusterapi.InstanceCPULabelKey,

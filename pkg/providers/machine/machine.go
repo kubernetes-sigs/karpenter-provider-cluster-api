@@ -21,17 +21,18 @@ import (
 	"fmt"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
 
 type Provider interface {
 	Get(context.Context, string) (*capiv1beta1.Machine, error)
-	List(context.Context) ([]*capiv1beta1.Machine, error)
+	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta1.Machine, error)
 	IsDeleting(*capiv1beta1.Machine) bool
 	AddDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
 	RemoveDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
+	Update(context.Context, *capiv1beta1.Machine) error
 }
 
 type DefaultProvider struct {
@@ -63,17 +64,18 @@ func (p *DefaultProvider) Get(ctx context.Context, providerID string) (*capiv1be
 	return nil, nil
 }
 
-// List returns a slice of Machines that are currently participating with Karpenter.
-// It determines participation by the presence of the node pool member label as defined
-// by the karpenter cluster-api provider.
-func (p *DefaultProvider) List(ctx context.Context) ([]*capiv1beta1.Machine, error) {
+func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelector) ([]*capiv1beta1.Machine, error) {
 	machines := []*capiv1beta1.Machine{}
 
-	listOptions := []client.ListOption{
-		client.MatchingLabels{
-			providers.NodePoolMemberLabel: "",
-		},
+	listOptions := []client.ListOption{}
+	if selector != nil {
+		sm, err := metav1.LabelSelectorAsSelector(selector)
+		if err != nil {
+			return machines, fmt.Errorf("unable to convert selector in MachineDeployment List: %w", err)
+		}
+		listOptions = append(listOptions, &client.ListOptions{LabelSelector: sm})
 	}
+
 	machineList := &capiv1beta1.MachineList{}
 	err := p.kubeClient.List(ctx, machineList, listOptions...)
 	if err != nil {
@@ -135,6 +137,15 @@ func (p *DefaultProvider) RemoveDeleteAnnotation(ctx context.Context, machine *c
 		if err != nil {
 			return fmt.Errorf("unable to remove deletion annotation from Machine %q: %w", machine.Name, err)
 		}
+	}
+
+	return nil
+}
+
+func (p *DefaultProvider) Update(ctx context.Context, machine *capiv1beta1.Machine) error {
+	err := p.kubeClient.Update(ctx, machine)
+	if err != nil {
+		return fmt.Errorf("unable to update Machine%q: %w", machine.Name, err)
 	}
 
 	return nil

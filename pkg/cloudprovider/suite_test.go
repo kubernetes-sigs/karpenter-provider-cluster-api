@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	api "sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
-	"sigs.k8s.io/karpenter/pkg/apis/v1beta1"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
 )
 
 const (
@@ -70,8 +70,8 @@ var _ = BeforeSuite(func() {
 
 	testScheme = scheme.Scheme
 	Expect(capiv1beta1.AddToScheme(testScheme)).To(Succeed())
-	Expect(api.AddToScheme(testScheme)).To(Succeed())
-	Expect(v1beta1.SchemeBuilder.AddToScheme(testScheme)).To(Succeed())
+	Expect(v1alpha1.AddToScheme(testScheme)).To(Succeed())
+	Expect(karpv1beta1.SchemeBuilder.AddToScheme(testScheme)).To(Succeed())
 
 	cl, err = client.New(cfg, client.Options{Scheme: testScheme})
 	Expect(err).NotTo(HaveOccurred())

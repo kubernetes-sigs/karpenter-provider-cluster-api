@@ -61,11 +61,11 @@ func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelect
 	}
 
 	if selector != nil {
-		sm, err := metav1.LabelSelectorAsMap(selector)
+		sm, err := metav1.LabelSelectorAsSelector(selector)
 		if err != nil {
 			return machineDeployments, fmt.Errorf("unable to convert selector in MachineDeployment List: %w", err)
 		}
-		listOptions = append(listOptions, client.MatchingLabels(sm))
+		listOptions = append(listOptions, &client.ListOptions{LabelSelector: sm})
 	}
 	machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
 	err := p.kubeClient.List(ctx, machineDeploymentList, listOptions...)

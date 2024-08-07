@@ -119,6 +119,15 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 var _ = Describe("Machine DefaultProvider.List method", func() {
 	var provider Provider
 
+	NodePoolMemberLabelSelector := metav1.LabelSelector{
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      providers.NodePoolMemberLabel,
+				Operator: metav1.LabelSelectorOpExists,
+			},
+		},
+	}
+
 	BeforeEach(func() {
 		provider = NewDefaultProvider(context.Background(), cl)
 	})
@@ -133,7 +142,7 @@ var _ = Describe("Machine DefaultProvider.List method", func() {
 	})
 
 	It("returns an empty list when no Machines are present in API", func() {
-		machines, err := provider.List(context.Background())
+		machines, err := provider.List(context.Background(), &NodePoolMemberLabelSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(0))
 	})
@@ -142,7 +151,7 @@ var _ = Describe("Machine DefaultProvider.List method", func() {
 		machine := newMachine("karpenter-1", "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		machines, err := provider.List(context.Background())
+		machines, err := provider.List(context.Background(), &NodePoolMemberLabelSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(1))
 	})
@@ -154,7 +163,7 @@ var _ = Describe("Machine DefaultProvider.List method", func() {
 		machine = newMachine("clusterapi-1", "workload-cluster", false)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		machines, err := provider.List(context.Background())
+		machines, err := provider.List(context.Background(), &NodePoolMemberLabelSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(1))
 	})
@@ -163,7 +172,7 @@ var _ = Describe("Machine DefaultProvider.List method", func() {
 		machine := newMachine("clusterapi-1", "workload-cluster", false)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		machines, err := provider.List(context.Background())
+		machines, err := provider.List(context.Background(), &NodePoolMemberLabelSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(0))
 	})
