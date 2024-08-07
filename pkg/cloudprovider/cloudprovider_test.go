@@ -73,6 +73,15 @@ var _ = Describe("CloudProvider.Create method", func() {
 	})
 
 	It("returns an error when the NodeClass reference is not found", func() {
+		nodeClaim := &karpv1beta1.NodeClaim{}
+		nodeClaim.Name = "TestNodeClaim"
+		nodeClaim.Spec.NodeClassRef = &karpv1beta1.NodeClassReference{
+			Name: "Does-Not-Exist",
+		}
+		createdNodeClaim, err := provider.Create(context.Background(), nodeClaim)
+		Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("cannot satisfy create, unable to resolve NodeClass from NodeClaim %q:", nodeClaim.Name))))
+		Expect(createdNodeClaim).To(BeNil())
+
 	})
 })
 
