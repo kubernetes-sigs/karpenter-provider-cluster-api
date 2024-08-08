@@ -11,7 +11,8 @@ owned cluster.
 
 This project is under active development and is in an experimental state. It is
 not intended for production use, yet...
-The current focus is on implementing the [Karpenter cloudprovider interface][kci].
+The current focus is on implementing the [Karpenter cloudprovider interface][kci],
+and closing feature gaps with the native Karpenter providers (e.g. AWS, Azure).
 
 ### cloudprovider interface implementation checklist
 
@@ -56,5 +57,5 @@ the architecture and implementation of this provider.
 [karpenter]: https://karpenter.sh
 [kubernetes]: https://kubernetes.io
 [clusterapi]: https://cluster-api.sigs.k8s.io
-[kci]: https://github.com/kubernetes-sigs/karpenter/blob/main/pkg/cloudprovider/types.go 
+[kci]: https://github.com/kubernetes-sigs/karpenter/blob/main/pkg/cloudprovider/types.go
 [cakfg]: https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/community/20231018-karpenter-integration.md
