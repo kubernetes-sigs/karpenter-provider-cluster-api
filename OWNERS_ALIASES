@@ -1,0 +1,35 @@
+# See the OWNERS docs: https://git.k8s.io/community/contributors/guide/owners.md
+# This file has been sourced from https://github.com/kubernetes-sigs/cluster-api/blob/main/OWNERS_ALIASES
+
+aliases:
+  sig-cluster-lifecycle-leads:
+  - fabriziopandini
+  - justinsb
+  - neolit123
+  - vincepri
+
+  # -----------------------------------------------------------
+  # OWNER_ALIASES for Cluster API
+  # -----------------------------------------------------------
+
+  # active folks who can be contacted to perform admin-related
+  # tasks on the repo, or otherwise approve any PRS.
+  cluster-api-admins:
+  - fabriziopandini
+  - sbueringer
+  - vincepri
+
+  # non-admin folks who have write-access and can approve any PRs in the repo
+  cluster-api-maintainers:
+  - chrischdi
+  - enxebre
+  - fabriziopandini
+  - killianmuldoon
+  - sbueringer
+  - vincepri
+
+  # folks who can review and LGTM any PRs in the repo
+  cluster-api-reviewers:
+  - jackfrancis
+  - JoelSpeed
+  - richardcase
