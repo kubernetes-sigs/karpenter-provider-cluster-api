@@ -9,21 +9,11 @@ owned cluster.
 
 ## Status
 
-This project is under active development and is in an experimental state. It is
-not intended for production use, yet...
-The current focus is on implementing the [Karpenter cloudprovider interface][kci],
-and closing feature gaps with the native Karpenter providers (e.g. AWS, Azure).
-
-### cloudprovider interface implementation checklist
-
-- [x] `Create`
-- [x] `Delete`
-- [x] `Get`
-- [x] `GetInstanceTypes`
-- [x] `GetSupportedNodeClasses`
-- [ ] `IsDrifted`
-- [x] `List`
-- [x] `Name`
+This project is currently, as of summer 2024, an experimental proof of concept
+for how Karpenter might integrate with Cluster API. The intention is for the Kubernetes
+community to use this experiment for learning more about the design pattern, feature
+gaps, and areas for improvement. With the ultimate goal being a standard release
+cycle and production ready Karpenter Cluster API provider.
 
 ### Design topics
 
