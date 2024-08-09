@@ -15,6 +15,9 @@ community to use this experiment for learning more about the design pattern, fea
 gaps, and areas for improvement. With the ultimate goal being a standard release
 cycle and production ready Karpenter Cluster API provider.
 
+For information about how to build and run the Karpenter Cluster API provider, please
+see the [Getting Started](docs/docs/getting-started.md) documentation.
+
 ### Design topics
 
 These are a few topics that are under active discussion by the
