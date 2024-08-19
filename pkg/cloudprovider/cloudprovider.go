@@ -81,6 +81,10 @@ type CloudProvider struct {
 }
 
 func (c *CloudProvider) Create(ctx context.Context, nodeClaim *karpv1beta1.NodeClaim) (*karpv1beta1.NodeClaim, error) {
+	// to eliminate racing if multiple creation occur, we gate access to this function
+	c.accessLock.Lock()
+	defer c.accessLock.Unlock()
+
 	if nodeClaim == nil {
 		return nil, fmt.Errorf("cannot satisfy create, NodeClaim is nil")
 	}
