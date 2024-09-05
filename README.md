@@ -7,6 +7,20 @@ underlying infrastructure provider. Meaning that this implementation of
 Karpenter is intended to be capable of managing Nodes on any Cluster API
 owned cluster.
 
+**What is a "provider"?**
+
+The term "provider" is used in different ways depending on the context. Within the
+Cluster API frame of reference, a "provider" is the controllers and CRDs
+which form the integration between the Cluster API Kubernetes resources (for example Machine,
+MachineDeployment, etc.) and the underlying infrastructure (for example OpenStack).
+Within the Karpenter frame of reference, a "provider" is the implementation of Karpenter
+for a specific infrastructure.
+
+This repository contains the specific implementation of Karpenter that can interact with Kubernetes
+clusters which contain the Cluster API CRDs and controllers. In this manner, Cluster API
+is the infrastructure to which this Karpenter implementation can interact with, in much the
+same way as other Karpenter implementations may interact directly with AWS or Azure.
+
 ## Status
 
 This project is currently, as of summer 2024, an experimental proof of concept
