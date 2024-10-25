@@ -17,12 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
-	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
+	karpv1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 )
 
 func init() {
-	karpv1beta1.RestrictedLabelDomains = karpv1beta1.RestrictedLabelDomains.Insert(RestrictedLabelDomains...)
-	karpv1beta1.WellKnownLabels = karpv1beta1.WellKnownLabels.Insert(
+	karpv1.RestrictedLabelDomains = karpv1.RestrictedLabelDomains.Insert(RestrictedLabelDomains...)
+	karpv1.WellKnownLabels = karpv1.WellKnownLabels.Insert(
 		LabelInstanceMemory,
 		LabelInstanceCpu,
 	)

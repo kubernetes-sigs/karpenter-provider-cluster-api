@@ -21,6 +21,7 @@ import (
 	"log"
 
 	"github.com/samber/lo"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -30,14 +31,13 @@ import (
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/operator/options"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
-	karpv1beta1 "sigs.k8s.io/karpenter/pkg/apis/v1beta1"
+	karpv1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 	"sigs.k8s.io/karpenter/pkg/operator"
-	"sigs.k8s.io/karpenter/pkg/operator/scheme"
 )
 
 func init() {
-	karpv1beta1.RestrictedLabelDomains = karpv1beta1.RestrictedLabelDomains.Insert(v1alpha1.Group)
-	karpv1beta1.WellKnownLabels = karpv1beta1.WellKnownLabels.Insert(
+	karpv1.RestrictedLabelDomains = karpv1.RestrictedLabelDomains.Insert(v1alpha1.Group)
+	karpv1.WellKnownLabels = karpv1.WellKnownLabels.Insert(
 		clusterapi.InstanceSizeLabelKey,
 		clusterapi.InstanceFamilyLabelKey,
 		clusterapi.InstanceCPULabelKey,
