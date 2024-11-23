@@ -3,6 +3,7 @@ module sigs.k8s.io/karpenter-provider-cluster-api
 go 1.23.2
 
 require (
+	github.com/awslabs/operatorpkg v0.0.0-20240805231134-67d0acfb6306
 	github.com/onsi/ginkgo/v2 v2.20.2
 	github.com/onsi/gomega v1.34.2
 	github.com/samber/lo v1.47.0
@@ -21,7 +22,6 @@ require (
 require (
 	contrib.go.opencensus.io/exporter/ocagent v0.7.1-0.20200907061046-05415f1de66d // indirect
 	contrib.go.opencensus.io/exporter/prometheus v0.4.0 // indirect
-	github.com/awslabs/operatorpkg v0.0.0-20240805231134-67d0acfb6306 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/blendle/zapdriver v1.3.1 // indirect
