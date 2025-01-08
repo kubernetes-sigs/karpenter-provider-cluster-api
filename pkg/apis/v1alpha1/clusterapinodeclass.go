@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/awslabs/operatorpkg/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -31,7 +32,11 @@ type ClusterAPINodeClassSpec struct {
 }
 
 // ClusterAPINodeClassStatus is the status for ClusterAPINodeClasses
-type ClusterAPINodeClassStatus struct{}
+type ClusterAPINodeClassStatus struct {
+	// Conditions contains signals for health and readiness
+	// +optional
+	Conditions []status.Condition `json:"conditions,omitempty"`
+}
 
 // ClusterAPINodeClass is the Schema for the ClusterAPINodeClass API
 // +kubebuilder:object:root=true
@@ -52,4 +57,19 @@ type ClusterAPINodeClassList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []ClusterAPINodeClass `json:"items"`
+}
+
+// The following methods are implemented to satisfy the Object interface
+// from https://github.com/awslabs/operatorpkg/blob/main/status/condition.go
+// which in turn is utilized by the cloudprovider.GetSupportedNodeClasses method.
+func (nc *ClusterAPINodeClass) StatusConditions() status.ConditionSet {
+	return status.NewReadyConditions().For(nc)
+}
+
+func (nc *ClusterAPINodeClass) GetConditions() []status.Condition {
+	return nc.Status.Conditions
+}
+
+func (nc *ClusterAPINodeClass) SetConditions(conditions []status.Condition) {
+	nc.Status.Conditions = conditions
 }
