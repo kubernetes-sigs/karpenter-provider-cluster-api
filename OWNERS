@@ -7,5 +7,6 @@ approvers:
   - cluster-api-maintainers
 
 reviewers:
+  - faermanj
   - cluster-api-maintainers
   - cluster-api-reviewers
