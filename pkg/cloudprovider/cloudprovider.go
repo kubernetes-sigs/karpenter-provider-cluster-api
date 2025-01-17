@@ -311,6 +311,13 @@ func (c *CloudProvider) Name() string {
 	return "clusterapi"
 }
 
+func (c *CloudProvider) RepairPolicies() []cloudprovider.RepairPolicy {
+	// TODO(elmiko) research what this means for cluster-api, perhaps there are conditions that
+	// we could use from cluster-api to determine when repair should be initiated.
+
+	return []cloudprovider.RepairPolicy{}
+}
+
 func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machine *capiv1beta1.Machine) (*capiv1beta1.MachineDeployment, error) {
 	mdName, found := machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel]
 	if !found {
