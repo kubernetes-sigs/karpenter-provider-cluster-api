@@ -35,5 +35,5 @@ func main() {
 			op.GetClient(),
 			op.EventRecorder,
 			cloudProvider,
-		)...).Start(ctx, cloudProvider)
+		)...).Start(ctx)
 }
