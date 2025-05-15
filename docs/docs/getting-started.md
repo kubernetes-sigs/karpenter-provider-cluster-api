@@ -3,6 +3,16 @@
 The process for running the Cluster API Karpenter provider contains several
 manual steps which must be performed before it will operate.
 
+## Prerequisites
+
+These instructions work best with the following versions:
+
+| Component | Version |
+|-----------|---------|
+| karpenter-provider-cluster-api | 0.1.0 |
+| cluster-api | 1.6 |
+| kubernetes | 1.30 |
+
 ## Building
 
 You will need to build the binary for the Karpenter Cluster API provider. To do
