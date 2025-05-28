@@ -418,10 +418,15 @@ func (c *CloudProvider) pollForUnclaimedMachineInMachineDeploymentWithTimeout(ct
 			return false, nil
 		}
 
-		// take the first Machine from the list
-		machine = machineList[0]
+		// find the first machine with a provider id
+		for i, m := range machineList {
+			if m.Spec.ProviderID != nil {
+				machine = machineList[i]
+				return true, nil
+			}
+		}
 
-		return true, nil
+		return false, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error polling for an unclaimed Machine in MachineDeployment %q: %w", machineDeployment.Name, err)
