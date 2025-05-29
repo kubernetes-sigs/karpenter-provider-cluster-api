@@ -2,8 +2,8 @@ github.com/Pallinder/go-randomdata v1.2.0 h1:DZ41wBchNRb/0GfsePLiSwb0PHZmT67XY00
 github.com/Pallinder/go-randomdata v1.2.0/go.mod h1:yHmJgulpD2Nfrm0cR9tI/+oAgRqCQQixsA8HyRZfV9Y=
 github.com/avast/retry-go v3.0.0+incompatible h1:4SOWQ7Qs+oroOTQOYnAHqelpCO0biHSxpiH9JdtuBj0=
 github.com/avast/retry-go v3.0.0+incompatible/go.mod h1:XtSnn+n/sHqQIpZ10K1qAevBhOOCWBLXXy3hyiqqBrY=
-github.com/awslabs/operatorpkg v0.0.0-20241125173122-bef8fba1bdf6 h1:O32mqYd4TFNsiZP93RSPfkAKaskV0vP8pBcwTkR9p2M=
-github.com/awslabs/operatorpkg v0.0.0-20241125173122-bef8fba1bdf6/go.mod h1:jina2fQk+b3oa9r5bRuMDbpy6mfhTGuruh05oVVWwnk=
+github.com/awslabs/operatorpkg v0.0.0-20241205163410-0fff9f28d115 h1:9nhjY3dzCpEmhpQ0vMlhB7wqucAiftLjAIEQu8uT2J4=
+github.com/awslabs/operatorpkg v0.0.0-20241205163410-0fff9f28d115/go.mod h1:TTs6HGuqmgdNyNlbdv29v1OoON+kQKVPojZgJaJVtNk=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
@@ -247,8 +247,8 @@ sigs.k8s.io/controller-tools v0.16.5 h1:5k9FNRqziBPwqr17AMEPPV/En39ZBplLAdOwwQHr
 sigs.k8s.io/controller-tools v0.16.5/go.mod h1:8vztuRVzs8IuuJqKqbXCSlXcw+lkAv/M2sTpg55qjMY=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd h1:EDPBXCAspyGV4jQlpZSudPeMmr1bNJefnuqLsRAsHZo=
 sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd/go.mod h1:B8JuhiUyNFVKdsE8h686QcCxMaH6HrOAZj4vswFpcB0=
-sigs.k8s.io/karpenter v1.1.0 h1:4SdCXihNKH4Y5xLwtKh7sqvCPYTQ3vCvCTPFRaNPQ5Y=
-sigs.k8s.io/karpenter v1.1.0/go.mod h1:LPVsUkC/MdmIjCBcmNVzy1wLp86xRKTRKFGPSNAW+YE=
+sigs.k8s.io/karpenter v1.1.3 h1:s2mW+hUqL1G6cLZyPsltwCuBIK4Yxm6nq8bpRDsx7X4=
+sigs.k8s.io/karpenter v1.1.3/go.mod h1:OfPdXEh3E2rjV1nleAtCKjHwQ/rVSO0t8HCMbJhYzPo=
 sigs.k8s.io/structured-merge-diff/v4 v4.4.1 h1:150L+0vs/8DA78h1u02ooW1/fFq/Lwr+sGiqlzvrtq4=
 sigs.k8s.io/structured-merge-diff/v4 v4.4.1/go.mod h1:N8hJocpFajUSSeSJ9bOZ77VzejKZaXsTtZo4/u7Io08=
 sigs.k8s.io/yaml v1.4.0 h1:Mk1wCc2gy/F0THH0TAp1QYyJNzRm2KCLy3o5ASXVI5E=

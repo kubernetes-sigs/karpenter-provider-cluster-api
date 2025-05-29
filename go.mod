@@ -1,9 +1,9 @@
 module sigs.k8s.io/karpenter-provider-cluster-api
 
-go 1.23.2
+go 1.24.2
 
 require (
-	github.com/awslabs/operatorpkg v0.0.0-20241125173122-bef8fba1bdf6
+	github.com/awslabs/operatorpkg v0.0.0-20241205163410-0fff9f28d115
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.0
 	github.com/samber/lo v1.47.0
@@ -16,10 +16,12 @@ require (
 	sigs.k8s.io/controller-runtime v0.19.4
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20250106171007-7436275c4311
 	sigs.k8s.io/controller-tools v0.16.5
-	sigs.k8s.io/karpenter v1.1.0
+	sigs.k8s.io/karpenter v1.1.3
 )
 
 require (
+	github.com/Pallinder/go-randomdata v1.2.0 // indirect
+	github.com/avast/retry-go v3.0.0+incompatible // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
