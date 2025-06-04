@@ -52,7 +52,7 @@ func eventuallyDeleteAllOf(cl client.Client, obj client.Object, ls client.Object
 }
 
 var _ = Describe("CloudProvider.Create method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
@@ -86,7 +86,7 @@ var _ = Describe("CloudProvider.Create method", func() {
 })
 
 var _ = Describe("CloudProvider.Delete method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
@@ -207,7 +207,7 @@ var _ = Describe("CloudProvider.Delete method", func() {
 })
 
 var _ = Describe("CloudProvider.Get method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
@@ -258,7 +258,7 @@ var _ = Describe("CloudProvider.Get method", func() {
 })
 
 var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
@@ -316,7 +316,7 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 })
 
 var _ = Describe("CloudProvider.findInstanceTypesForNodeClass method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineDeploymentProvider := machinedeployment.NewDefaultProvider(context.Background(), cl)
@@ -458,7 +458,7 @@ var _ = Describe("machineDeploymentToInstanceType function", func() {
 })
 
 var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
@@ -514,7 +514,7 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodeClaim method", func() {
 })
 
 var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
@@ -569,7 +569,7 @@ var _ = Describe("CloudProvider.resolveNodeClassFromNodePool method", func() {
 })
 
 var _ = Describe("CloudProvider.List method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
@@ -629,7 +629,7 @@ var _ = Describe("CloudProvider.List method", func() {
 })
 
 var _ = Describe("CloudProvider.machineToNodeClaim method", func() {
-	var provider *CloudProvider
+	var provider CloudProvider
 
 	BeforeEach(func() {
 		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
