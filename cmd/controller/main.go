@@ -20,6 +20,7 @@ import (
 	clusterapi "sigs.k8s.io/karpenter-provider-cluster-api/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/operator"
 	"sigs.k8s.io/karpenter/pkg/controllers"
+	"sigs.k8s.io/karpenter/pkg/controllers/state"
 	coreoperator "sigs.k8s.io/karpenter/pkg/operator"
 )
 
@@ -27,6 +28,7 @@ func main() {
 	ctx, op := operator.NewOperator(coreoperator.NewOperator())
 
 	cloudProvider := clusterapi.NewCloudProvider(ctx, op.GetClient(), op.MachineProvider, op.MachineDeploymentProvider)
+	clusterState := state.NewCluster(op.Clock, op.GetClient(), cloudProvider)
 	op.
 		WithControllers(ctx, controllers.NewControllers(
 			ctx,
@@ -35,5 +37,6 @@ func main() {
 			op.GetClient(),
 			op.EventRecorder,
 			cloudProvider,
+			clusterState,
 		)...).Start(ctx)
 }
