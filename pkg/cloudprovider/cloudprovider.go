@@ -585,7 +585,7 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 		scheduling.NewRequirement(karpv1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, karpv1.CapacityTypeOnDemand),
 	}
 	offerings := cloudprovider.Offerings{
-		cloudprovider.Offering{
+		&cloudprovider.Offering{
 			Requirements: scheduling.NewRequirements(requirements...),
 			Price:        0.0,
 			Available:    true,
