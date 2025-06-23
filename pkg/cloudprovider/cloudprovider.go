@@ -174,7 +174,7 @@ func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *karpv1.NodeClaim)
 		return fmt.Errorf("error finding Machine with provider ID %q to Delete NodeClaim %q: %w", nodeClaim.Status.ProviderID, nodeClaim.Name, err)
 	}
 	if machine == nil {
-		return fmt.Errorf("unable to find Machine with provider ID %q to Delete NodeClaim %q", nodeClaim.Status.ProviderID, nodeClaim.Name)
+		return cloudprovider.NewNodeClaimNotFoundError(fmt.Errorf("unable to find Machine with provider ID %q to Delete NodeClaim %q", nodeClaim.Status.ProviderID, nodeClaim.Name))
 	}
 
 	// check if already deleting
@@ -227,10 +227,10 @@ func (c *CloudProvider) Get(ctx context.Context, providerID string) (*karpv1.Nod
 
 	machine, err := c.machineProvider.Get(ctx, providerID)
 	if err != nil {
-		return nil, fmt.Errorf("unable to find Machine for Get: %w", err)
+		return nil, fmt.Errorf("error getting Machine: %w", err)
 	}
 	if machine == nil {
-		return nil, nil
+		return nil, cloudprovider.NewNodeClaimNotFoundError(fmt.Errorf("cannot find Machine with provider ID %q", providerID))
 	}
 
 	nodeClaim, err := c.machineToNodeClaim(ctx, machine)

@@ -226,9 +226,9 @@ var _ = Describe("CloudProvider.Get method", func() {
 		Expect(nodeClaim).To(BeNil())
 	})
 
-	It("returns nil when the Machine is not present", func() {
+	It("returns error when the Machine is not present", func() {
 		nodeClaim, err := provider.Get(context.Background(), "clusterapi://the-wrong-provider-id")
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).To(MatchError(fmt.Errorf("cannot find Machine with provider ID %q", "clusterapi://the-wrong-provider-id")))
 		Expect(nodeClaim).To(BeNil())
 	})
 
