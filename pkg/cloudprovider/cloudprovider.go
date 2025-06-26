@@ -593,9 +593,14 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 	}
 
 	instanceType.Offerings = offerings
-	// TODO (elmiko) this may not be correct given the code comment in the InstanceType struct about the name corresponding
+
+	// TODO (elmiko) find a better way to learn the instance type. The instance name needs to be the same
+	// as the well-known `node.kubernetes.io/instance-type` that will be on resulting nodes. Usually, a
+	// cloud controller, or similar, mechanism is used to apply this label.
+	// For now, we check the labels we know about from the MachineDeployment, if the instance type label
+	// is not there, leave it blank.
 	// to the v1.LabelInstanceTypeStable. if karpenter expects this to match the node, then we need to get this value through capi.
-	instanceType.Name = machineDeployment.Name
+	instanceType.Name = labels[corev1.LabelInstanceTypeStable]
 
 	// TODO (elmiko) add the proper overhead information, not sure where we will harvest this information.
 	// perhaps it needs to be a configurable option somewhere.
