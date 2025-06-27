@@ -41,8 +41,12 @@ func NewController(kubeClient client.Client) *Controller {
 	}
 }
 
+func (c *Controller) Name() string {
+	return "nodeclass.status"
+}
+
 func (c *Controller) Reconcile(ctx context.Context, nodeClass *v1alpha1.ClusterAPINodeClass) (reconcile.Result, error) {
-	ctx = injection.WithControllerName(ctx, "nodeclass.status")
+	ctx = injection.WithControllerName(ctx, c.Name())
 	stored := nodeClass.DeepCopy()
 
 	// for now, we just want to set all nodeclasses to ready. in the future we may want
@@ -68,7 +72,7 @@ func (c *Controller) Reconcile(ctx context.Context, nodeClass *v1alpha1.ClusterA
 
 func (c *Controller) Register(_ context.Context, m manager.Manager) error {
 	b := controllerruntime.NewControllerManagedBy(m).
-		Named("nodeclass.status").
+		Named(c.Name()).
 		For(&v1alpha1.ClusterAPINodeClass{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: 10})
 
