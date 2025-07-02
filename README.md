@@ -23,11 +23,22 @@ same way as other Karpenter implementations may interact directly with AWS or Az
 
 ## Status
 
-This project is currently, as of summer 2024, an experimental proof of concept
-for how Karpenter might integrate with Cluster API. The intention is for the Kubernetes
-community to use this experiment for learning more about the design pattern, feature
-gaps, and areas for improvement. With the ultimate goal being a standard release
+This project is an experimental proof of concept for how Karpenter might integrate with Cluster API.
+The intention is for the Kubernetes community to use this experiment for learning more about the
+design pattern, feature gaps, and areas for improvement. With the ultimate goal being a standard release
 cycle and production ready Karpenter Cluster API provider.
+
+The `v0.1.0` release contains basic functionality for creating and deleting nodes within a cluster.
+Please see the [quickstart instructions for more details](docs/docs/getting-started.md).
+
+The `main` branch is potentially unstable as we work towards compatibility with the latest versions
+of Karpenter and Cluster API. The following features are under development or in some working state:
+
+- [x] create nodes
+- [x] delete nodes
+- [ ] drift detection
+- [ ] disruption/consolidation
+- [ ] cost integration
 
 For information about how to build and run the Karpenter Cluster API provider, please
 see the [Getting Started](docs/docs/getting-started.md) documentation.
