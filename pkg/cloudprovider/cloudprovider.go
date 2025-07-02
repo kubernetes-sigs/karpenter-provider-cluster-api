@@ -629,12 +629,6 @@ func managedNodeLabelsFromLabels(labels map[string]string) map[string]string {
 func nodeLabelsFromMachineDeployment(machineDeployment *capiv1beta1.MachineDeployment) map[string]string {
 	labels := map[string]string{}
 
-	if machineDeployment.Spec.Template.Labels != nil {
-		// get the labels that will be propagated to the node from the machinedeployment
-		// see https://cluster-api.sigs.k8s.io/developer/architecture/controllers/metadata-propagation#metadata-propagation
-		labels = managedNodeLabelsFromLabels(machineDeployment.Spec.Template.Labels)
-	}
-
 	// next we integrate labels from the scale-from-zero annotations, these can override
 	// the propagated labels.
 	// see https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/proposals/20210310-opt-in-autoscaling-from-zero.md#machineset-and-machinedeployment-annotations
