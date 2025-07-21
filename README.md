@@ -1,6 +1,6 @@
 # Karpenter provider Cluster API
 
-[Karpenter][karpenter] is a [Kuberneters][kubernetes] autoprovisioner that
+[Karpenter][karpenter] is a [Kubernetes][kubernetes] autoprovisioner that
 provides just-in-time Nodes for any cluster. This repository contains an
 implementation of Karpenter that uses [Cluster API][clusterapi] as the
 underlying infrastructure provider. Meaning that this implementation of
