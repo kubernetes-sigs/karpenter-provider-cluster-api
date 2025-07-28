@@ -606,6 +606,7 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 	// For now, we check the labels we know about from the MachineDeployment, if the instance type label
 	// is not there, leave it blank.
 	// to the v1.LabelInstanceTypeStable. if karpenter expects this to match the node, then we need to get this value through capi.
+	// TODO (jkyros) Add a test case to test this behavior
 	instanceType.Name = labels[corev1.LabelInstanceTypeStable]
 
 	// TODO (elmiko) add the proper overhead information, not sure where we will harvest this information.
