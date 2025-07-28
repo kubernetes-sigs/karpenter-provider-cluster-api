@@ -382,7 +382,10 @@ func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1b
 		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, no memory capacity found on MachineDeployment %q", machine.GetName(), machineDeployment.Name)
 	}
 
-	// TODO (elmiko) add labels, and taints
+	// Set NodeClaim labels from the MachineDeployment
+	nodeClaim.Labels = nodeLabelsFromMachineDeployment(machineDeployment)
+
+	// TODO (elmiko) add taints
 
 	nodeClaim.Status.Capacity = capacity
 
@@ -532,7 +535,10 @@ func createNodeClaimFromMachineDeployment(machineDeployment *capiv1beta1.Machine
 	nodeClaim.Status.Capacity = instanceType.Capacity
 	nodeClaim.Status.Allocatable = instanceType.Allocatable()
 
-	// TODO (elmiko) we might need to also convey the labels and annotations on to the NodeClaim
+	// Set NodeClaim labels from the MachineDeployment
+	nodeClaim.Labels = nodeLabelsFromMachineDeployment(machineDeployment)
+
+	// TODO (elmiko) add taints
 
 	return nodeClaim
 }
