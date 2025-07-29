@@ -382,7 +382,10 @@ func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1b
 		return nil, fmt.Errorf("unable to convert Machine %q to a NodeClaim, no memory capacity found on MachineDeployment %q", machine.GetName(), machineDeployment.Name)
 	}
 
-	// TODO (elmiko) add labels, and taints
+	// Set NodeClaim labels from the MachineDeployment
+	nodeClaim.Labels = nodeLabelsFromMachineDeployment(machineDeployment)
+
+	// TODO (elmiko) add taints
 
 	nodeClaim.Status.Capacity = capacity
 
@@ -532,7 +535,10 @@ func createNodeClaimFromMachineDeployment(machineDeployment *capiv1beta1.Machine
 	nodeClaim.Status.Capacity = instanceType.Capacity
 	nodeClaim.Status.Allocatable = instanceType.Allocatable()
 
-	// TODO (elmiko) we might need to also convey the labels and annotations on to the NodeClaim
+	// Set NodeClaim labels from the MachineDeployment
+	nodeClaim.Labels = nodeLabelsFromMachineDeployment(machineDeployment)
+
+	// TODO (elmiko) add taints
 
 	return nodeClaim
 }
@@ -593,9 +599,15 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 	}
 
 	instanceType.Offerings = offerings
-	// TODO (elmiko) this may not be correct given the code comment in the InstanceType struct about the name corresponding
+
+	// TODO (elmiko) find a better way to learn the instance type. The instance name needs to be the same
+	// as the well-known `node.kubernetes.io/instance-type` that will be on resulting nodes. Usually, a
+	// cloud controller, or similar, mechanism is used to apply this label.
+	// For now, we check the labels we know about from the MachineDeployment, if the instance type label
+	// is not there, leave it blank.
 	// to the v1.LabelInstanceTypeStable. if karpenter expects this to match the node, then we need to get this value through capi.
-	instanceType.Name = machineDeployment.Name
+	// TODO (jkyros) Add a test case to test this behavior
+	instanceType.Name = labels[corev1.LabelInstanceTypeStable]
 
 	// TODO (elmiko) add the proper overhead information, not sure where we will harvest this information.
 	// perhaps it needs to be a configurable option somewhere.
