@@ -5,13 +5,32 @@ manual steps which must be performed before it will operate.
 
 ## Prerequisites
 
-These instructions work best with the following versions:
+These instructions work best with the following versions and settings:
 
 | Component | Version |
 |-----------|---------|
 | karpenter-provider-cluster-api | 0.1.0 |
-| cluster-api | 1.6 |
-| kubernetes | 1.30 |
+| cluster-api | 1.10 |
+| kubernetes | 1.33 |
+
+Karpenter is connected to Cluster API management with `--cluster-api-kubeconfig` flag.
+
+```
++-------------------------+                        +---------------------------+
+|  mgmt                   |                        |  workload                 |
+|  +-------------------+  | cluster-api-kubeconfig | ------------------------  |
+|  | MachineDeployment |  |<-----------------------+  Karpenter                |
+|  +-------------------+  |                        |  +---------------------+  |
+|  +-------------------+  |                        |  | ClusterAPINodeClass |  |
+|  |    MachineSet     |  |                        |  +---------------------+  |
+|  +-------------------+  |                        |  +---------------------+  |
+|  +-------------------+  |                        |  |       NodePool      |  |
+|  |      Machine      |  |                        |  +---------------------+  |
+|  +-------------------+  |                        |  +---------------------+  |
++-------------------------+                        |  |      NodeClaim      |  |
+                                                   |  +---------------------+  |
+                                                   +---------------------------+
+```
 
 ## Building
 
@@ -78,9 +97,16 @@ for more configuration options.
 
 ### Configuring the Karpenter resources
 
-To engage Karpenter in the cluster you will need to create a NodePool and a ClusterAPINodeClass at
-the minimum. For a deeper discussion of NodePools and NodeClasses, please see the
+To engage Karpenter in the cluster you will need to create a NodePool, NodeClaim and a ClusterAPINodeClass at
+the minimum. For a deeper discussion of NodePools, NodeClaims and NodeClasses, please see the
 [Karpenter documentation on concepts](https://karpenter.sh/docs/concepts/).
+
+To apply these custom resources, run the following commands in the cluster that Karpenter will monitor.
+```
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/karpenter-provider-cluster-api/refs/heads/main/pkg/apis/crds/karpenter.cluster.x-k8s.io_clusterapinodeclasses.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/karpenter-provider-cluster-api/refs/heads/main/pkg/apis/crds/karpenter.sh_nodeclaims.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/karpenter-provider-cluster-api/refs/heads/main/pkg/apis/crds/karpenter.sh_nodepools.yaml
+```
 
 The following are basic examples of the NodePool and ClusterAPINodeClass resources. In brief,
 the NodePool will match on any node that contains the well-known Kubernetes architecture label
@@ -153,8 +179,19 @@ metadata:
     node.cluster.x-k8s.io/karpenter-member: ""
 ```
 
+### Run Karpenter Cluster API provider
+
+Execute the following command to run Karpenter Cluster API Provider in the workload cluster.
+
+```
+./bin/karpenter-clusterapi-controller --cluster-api-kubeconfig <mgmt.kubeconfig> --leader-election-namespace kube-system
+```
+
+**Caution:**  
+Because `--leader-election-namespace` defaults to empty, running `bin/karpenter-clusterapi-controller` without this flag and outside an in-cluster environment will result in an error.
+
 ### Demonstration of Karpenter Cluster API provider
 
 This is a demo that was given during the Cluster API office hours meeting on 2024-08-07.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/BZz5ibGP7ZQ?si=0Ql-p6hJZHXYfmKB" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+[YouTube video player](https://www.youtube.com/embed/BZz5ibGP7ZQ?si=0Ql-p6hJZHXYfmKB)
