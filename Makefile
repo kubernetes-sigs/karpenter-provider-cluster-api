@@ -23,6 +23,12 @@ GINKGO_ARGS = -v --randomize-all --randomize-suites --keep-going --race --trace 
 
 CONTROLLER_GEN = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 
+ARCH ?= $(shell go env GOARCH)
+
+CONTAINER_RUNTIME ?= docker
+BUILDER_IMAGE ?= docker.io/library/golang:1.24.2
+IMG ?= karpenter-clusterapi-controller
+
 all: help
 
 .PHONY: build
@@ -41,6 +47,10 @@ generate: gen-objects manifests ## generate all controller-gen files
 
 karpenter-clusterapi-controller: ## build the main karpenter controller
 	go build -o bin/karpenter-clusterapi-controller cmd/controller/main.go
+
+.PHONY: image
+image: ## Build manager container image
+	$(CONTAINER_RUNTIME) build --build-arg BUILDER_IMAGE=$(BUILDER_IMAGE) --build-arg ARCH=$(ARCH) . -t $(IMG)
 
 .PHONY: manifests
 manifests: ## generate the controller-gen kubernetes manifests
