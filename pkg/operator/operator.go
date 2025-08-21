@@ -22,6 +22,7 @@ import (
 
 	"github.com/samber/lo"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
@@ -70,11 +71,12 @@ func NewOperator(ctx context.Context, operator *operator.Operator) (context.Cont
 }
 
 func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Operator) (client.Client, error) {
-	if options.FromContext(ctx).ClusterAPIKubeConfigFile != "" {
-		clusterAPIKubeConfig, err := clientcmd.BuildConfigFromFlags("", options.FromContext(ctx).ClusterAPIKubeConfigFile)
-		if err != nil {
-			return nil, err
-		}
+	clusterAPIKubeConfig, err := buildClusterCAPIKubeConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if clusterAPIKubeConfig != nil {
 		mgmtCluster, err := cluster.New(clusterAPIKubeConfig, func(o *cluster.Options) {
 			o.Scheme = operator.GetScheme()
 		})
@@ -87,4 +89,28 @@ func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Op
 		return mgmtCluster.GetClient(), nil
 	}
 	return operator.GetClient(), nil
+}
+
+func buildClusterCAPIKubeConfig(ctx context.Context) (*rest.Config, error) {
+	kubeConfigFile := options.FromContext(ctx).ClusterAPIKubeConfigFile
+	if kubeConfigFile != "" {
+		return clientcmd.BuildConfigFromFlags("", kubeConfigFile)
+	}
+
+	url := options.FromContext(ctx).ClusterAPIUrl
+	token := options.FromContext(ctx).ClusterAPIToken
+	caData := options.FromContext(ctx).ClusterAPICertificateAuthorityData
+	skipTLSVerify := options.FromContext(ctx).ClusterAPISkipTlsVerify
+	if url != "" {
+		return &rest.Config{
+			Host:        url,
+			BearerToken: token,
+			TLSClientConfig: rest.TLSClientConfig{
+				CAData:   []byte(caData),
+				Insecure: skipTLSVerify,
+			},
+		}, nil
+	}
+
+	return nil, nil
 }

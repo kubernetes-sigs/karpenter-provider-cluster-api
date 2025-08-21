@@ -33,11 +33,19 @@ func init() {
 type optionsKey struct{}
 
 type Options struct {
-	ClusterAPIKubeConfigFile string
+	ClusterAPIKubeConfigFile           string
+	ClusterAPIUrl                      string
+	ClusterAPIToken                    string
+	ClusterAPICertificateAuthorityData string
+	ClusterAPISkipTlsVerify            bool
 }
 
 func (o *Options) AddFlags(fs *karpoptions.FlagSet) {
 	fs.StringVar(&o.ClusterAPIKubeConfigFile, "cluster-api-kubeconfig", "", "The path to the cluster api manager cluster kubeconfig file.  Defaults to service account credentials if not specified.")
+	fs.StringVar(&o.ClusterAPIUrl, "cluster-api-url", "", "The url of the cluster api manager cluster")
+	fs.StringVar(&o.ClusterAPIToken, "cluster-api-token", "", "The Bearer token for authentication of the cluster api manager cluster")
+	fs.StringVar(&o.ClusterAPICertificateAuthorityData, "cluster-api-certificate-authority-data", "", "The cert certificate authority of the cluster api manager cluster")
+	fs.BoolVar(&o.ClusterAPISkipTlsVerify, "cluster-api-skip-tls-verify", false, "Skip the check for certificate for validity of the cluster api manager cluster. This will make HTTPS connections insecure")
 }
 
 func (o *Options) Parse(fs *karpoptions.FlagSet, args ...string) error {
