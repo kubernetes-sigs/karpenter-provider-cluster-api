@@ -1,0 +1,67 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    {{- include "karpenter.labels" . | nindent 4 }}
+  name: {{ include "karpenter.fullname" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "karpenter.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "karpenter.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "karpenter.labels" . | nindent 4 }}
+  name: {{ include "karpenter.fullname" . }}
+rules:
+  - apiGroups: [ "karpenter.sh" ]
+    resources: [ "nodepools", "nodepools/status", "nodeclaims", "nodeclaims/status" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "karpenter.cluster.x-k8s.io" ]
+    resources: [ "clusterapinodeclasses" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "cluster.x-k8s.io" ]
+    resources: [ "machines","machinedeployments" ]
+    verbs: [ "get", "watch", "list", "update" ]
+  - apiGroups: [ "" ]
+    resources: [ "pods", "nodes", "persistentvolumes", "persistentvolumeclaims", "replicationcontrollers", "namespaces" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "storage.k8s.io" ]
+    resources: [ "storageclasses", "csinodes", "volumeattachments" ]
+    verbs: [ "get", "watch", "list" ]
+  - apiGroups: [ "apps" ]
+    resources: [ "daemonsets", "deployments", "replicasets", "statefulsets" ]
+    verbs: [ "list", "watch" ]
+  - apiGroups: [ "policy" ]
+    resources: [ "poddisruptionbudgets" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "" ]
+    resources: [ "events" ]
+    verbs: [ "get", "list", "watch" ]
+  - apiGroups: [ "karpenter.sh" ]
+    resources: [ "nodeclaims", "nodeclaims/status" ]
+    verbs: [ "create", "delete", "update", "patch" ]
+  - apiGroups: [ "karpenter.sh" ]
+    resources: [ "nodepools", "nodepools/status" ]
+    verbs: [ "update", "patch" ]
+  - apiGroups: [ "" ]
+    resources: [ "events" ]
+    verbs: [ "create", "patch" ]
+  - apiGroups: [ "" ]
+    resources: [ "nodes" ]
+    verbs: [ "patch", "delete", "update" ]
+  - apiGroups: [ "" ]
+    resources: [ "pods/eviction" ]
+    verbs: [ "create" ]
+  - apiGroups: [ "" ]
+    resources: [ "pods" ]
+    verbs: [ "delete" ]
+  - apiGroups: [ "karpenter.cluster.x-k8s.io" ]
+    resources: [ "clusterapinodeclasses", "clusterapinodeclasses/status" ]
+    verbs: [ "patch", "update" ]
