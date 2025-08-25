@@ -115,7 +115,7 @@ which is participating in Karpenter (see Configuring the Cluster API resources).
 
 **Example NodePool**
 ```yaml
-apiVersion: karpenter.sh/v1beta1
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: default
@@ -127,7 +127,7 @@ spec:
           operator: In
           values: ["amd64"]
       nodeClassRef:
-        apiVersion: karpenter.cluster.x-k8s.io/v1alpha1
+        group: karpenter.cluster.x-k8s.io
         kind: ClusterAPINodeClass
         name: default
 ```
