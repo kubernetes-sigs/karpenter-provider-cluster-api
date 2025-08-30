@@ -26,7 +26,7 @@ CONTROLLER_GEN = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-tools/cmd/c
 ARCH ?= $(shell go env GOARCH)
 
 CONTAINER_RUNTIME ?= docker
-BUILDER_IMAGE ?= docker.io/library/golang:1.24.2
+BUILDER_IMAGE ?=
 IMG ?= karpenter-clusterapi-controller
 
 all: help

@@ -15,7 +15,7 @@
 ARG BUILDER_IMAGE
 ARG ARCH
 
-FROM ${BUILDER_IMAGE} AS builder
+FROM ${BUILDER_IMAGE:-docker.io/library/golang:1.24.2} AS builder
 WORKDIR /workspace
 
 # Copy the Go Modules manifests
