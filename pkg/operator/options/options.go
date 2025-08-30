@@ -24,6 +24,7 @@ import (
 	"os"
 
 	karpoptions "sigs.k8s.io/karpenter/pkg/operator/options"
+	"sigs.k8s.io/karpenter/pkg/utils/env"
 )
 
 func init() {
@@ -41,11 +42,11 @@ type Options struct {
 }
 
 func (o *Options) AddFlags(fs *karpoptions.FlagSet) {
-	fs.StringVar(&o.ClusterAPIKubeConfigFile, "cluster-api-kubeconfig", "", "The path to the cluster api manager cluster kubeconfig file.  Defaults to service account credentials if not specified.")
-	fs.StringVar(&o.ClusterAPIUrl, "cluster-api-url", "", "The url of the cluster api manager cluster")
-	fs.StringVar(&o.ClusterAPIToken, "cluster-api-token", "", "The Bearer token for authentication of the cluster api manager cluster")
-	fs.StringVar(&o.ClusterAPICertificateAuthorityData, "cluster-api-certificate-authority-data", "", "The cert certificate authority of the cluster api manager cluster")
-	fs.BoolVar(&o.ClusterAPISkipTlsVerify, "cluster-api-skip-tls-verify", false, "Skip the check for certificate for validity of the cluster api manager cluster. This will make HTTPS connections insecure")
+	fs.StringVar(&o.ClusterAPIKubeConfigFile, "cluster-api-kubeconfig", env.WithDefaultString("CLUSTER_API_KUBECONFIG", ""), "The path to the cluster api manager cluster kubeconfig file.  Defaults to service account credentials if not specified.")
+	fs.StringVar(&o.ClusterAPIUrl, "cluster-api-url", env.WithDefaultString("CLUSTER_API_URL", ""), "The url of the cluster api manager cluster")
+	fs.StringVar(&o.ClusterAPIToken, "cluster-api-token", env.WithDefaultString("CLUSTER_API_TOKEN", ""), "The Bearer token for authentication of the cluster api manager cluster")
+	fs.StringVar(&o.ClusterAPICertificateAuthorityData, "cluster-api-certificate-authority-data", env.WithDefaultString("CLUSTER_API_CERTIFICATE_AUTHORITY_DATA", ""), "The cert certificate authority of the cluster api manager cluster")
+	fs.BoolVarWithEnv(&o.ClusterAPISkipTlsVerify, "cluster-api-skip-tls-verify", "CLUSTER_API_SKIP_TLS_VERIFY", false, "Skip the check for certificate for validity of the cluster api manager cluster. This will make HTTPS connections insecure")
 }
 
 func (o *Options) Parse(fs *karpoptions.FlagSet, args ...string) error {
