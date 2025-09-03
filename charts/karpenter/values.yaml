@@ -1,0 +1,37 @@
+# -- Overrides the chart's name
+nameOverride: ""
+# -- Overrides the chart's computed fullname
+fullnameOverride: ""
+# -- Number of replicas
+replicaCount: 1
+
+image:
+  # -- Tag of the controller image
+  tag: karpenter-clusterapi-controller
+  # -- Image pull policy of the controller image
+  pullPolicy: IfNotPresent
+
+# -- Arguments for the controller
+arguments: [ ]
+
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+
+# -- Resources for the controller container
+resources: { }
+
+# -- Node selectors to schedule the pod to nodes with labels
+nodeSelector: { }
+
+# -- Affinity rules for scheduling the pod
+affinity: { }
+
+# -- Tolerations to allow the pod to be scheduled to nodes with taints
+tolerations: [ ]
+
+# -- Volumes for the pod
+volumes: [ ]
+
+# -- VolumeMounts for the controller container
+volumeMounts: [ ]

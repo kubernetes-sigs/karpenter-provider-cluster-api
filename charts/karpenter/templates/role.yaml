@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    {{- include "karpenter.labels" . | nindent 4 }}
+  name: {{ include "karpenter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "karpenter.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "karpenter.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    {{- include "karpenter.labels" . | nindent 4 }}
+  name: {{ include "karpenter.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [ "coordination.k8s.io" ]
+    resources: [ "leases" ]
+    verbs: [ "get", "watch", "create", "patch", "update" ]
