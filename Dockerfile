@@ -34,12 +34,12 @@ COPY ./ ./
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux GOARCH=${ARCH} \
-    go build -trimpath -o manager cmd/controller/main.go
+    go build -trimpath -o karpenter-clusterapi-controller cmd/controller/main.go
 
 # Production image
 FROM gcr.io/distroless/static:nonroot-${ARCH}
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --from=builder /workspace/karpenter-clusterapi-controller .
 # Use uid of nonroot user (65532) because kubernetes expects numeric user when applying pod security policies
 USER 65532
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/karpenter-clusterapi-controller"]

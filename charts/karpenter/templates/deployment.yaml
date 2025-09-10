@@ -21,7 +21,7 @@ spec:
           image: {{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
-            - /manager
+            - /karpenter-clusterapi-controller
           {{- with .Values.arguments }}
           args:
             {{- toYaml . | nindent 12 }}
