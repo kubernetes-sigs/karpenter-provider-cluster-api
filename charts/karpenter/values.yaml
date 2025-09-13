@@ -21,6 +21,25 @@ securityContext:
 # -- Resources for the controller container
 resources: { }
 
+# -- Port for the health probe
+healthProbePort:
+  port: 8081
+# -- Port for the metrics endpoint
+metricsPort:
+  port: 8080
+
+# -- Environment variables for the controller container
+env: { }
+
+# -- Log level for the controller, default is "info"
+logLevel: info
+# -- Log output paths for the controller, default is "stdout"
+logOutputPaths:
+  - stdout
+# -- Log error output paths for the controller, default is "stderr"
+logErrorOutputPaths:
+  - stderr
+
 # -- Node selectors to schedule the pod to nodes with labels
 nodeSelector: { }
 
