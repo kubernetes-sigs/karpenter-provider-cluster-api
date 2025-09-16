@@ -40,8 +40,68 @@ spec:
           {{- end }}
           ports:
             - name: http-metrics
-              containerPort: 8080
+              containerPort: {{ .Values.metricsPort.port }}
               protocol: TCP
+            - name: http-health
+              containerPort: {{ .Values.healthProbePort.port }}
+              protocol: TCP
+          env:
+          {{- with .Values.env.batchIdleDuration }}
+            - name: BATCH_IDLE_DURATION
+              value: "{{ . }}"
+          {{- end }}
+          {{- with .Values.env.batchMaxDuration }}
+            - name: BATCH_MAX_DURATION
+              value: "{{ . }}"
+          {{- end }}
+          {{- with .Values.env.clusterAPICertificateAuthorityData }}
+            - name: CLUSTER_API_CERTIFICATE_AUTHORITY_DATA
+              value: "{{ . }}"
+          {{- end }}
+          {{- with .Values.env.clusterAPIKubeconfig }}
+            - name: CLUSTER_API_KUBECONFIG
+              value: "{{ . }}"
+          {{- end }}
+          {{- with .Values.env.clusterAPISkipTLSVerify }}
+            - name: CLUSTER_API_SKIP_TLS_VERIFY
+              value: "{{ . }}"
+          {{- end }}
+          {{- with .Values.env.clusterAPIToken }}
+            - name: CLUSTER_API_TOKEN
+              value: "{{ . }}"
+          {{- end }}
+          {{- with .Values.env.clusterAPIURL }}
+            - name: CLUSTER_API_URL
+              value: "{{ . }}"
+          {{- end }}
+            - name: HEALTH_PROBE_PORT
+              value: "{{ .Values.healthProbePort.port }}"
+          {{- with .Values.env.karpenterService }}
+            - name: KARPENTER_SERVICE
+              value: "{{ . }}"
+          {{- end }}
+          {{- with .Values.logLevel }}
+            - name: LOG_LEVEL
+              value: "{{ . }}"
+          {{- end }}
+          {{- with .Values.logOutputPaths }}
+            - name: LOG_OUTPUT_PATHS
+              value: "{{ join "," . }}"
+          {{- end }}
+          {{- with .Values.logErrorOutputPaths }}
+            - name: LOG_ERROR_OUTPUT_PATHS
+              value: "{{ join "," . }}"
+          {{- end }}
+          {{- with .Values.env.memoryLimit }}
+            - name: MEMORY_LIMIT
+              value: "{{ . }}"
+          {{- end }}
+            - name: METRICS_PORT
+              value: "{{ .Values.metricsPort.port }}"
+          {{- with .Values.env.preferencePolicy}}
+            - name: PREFERENCE_POLICY
+              value: "{{ . }}"
+          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
