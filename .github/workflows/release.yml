@@ -1,0 +1,44 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v*-test'
+jobs:
+  release:
+    permissions:
+      contents: write
+      pull-requests: write
+    if: github.repository == 'kubernetes-sigs/karpenter-provider-cluster-api'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+    - run: make docgen
+    - run: make release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPO: ${{ github.repository }}
+    - name: create pull request
+      uses: actions/github-script@v8
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          await github.rest.pulls.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `chore(release): release ${context.ref_name} (automated)`,
+            head: `release-${context.ref_name}`,
+            base: 'main',
+            body: `Release Changes for \`${context.ref_name}\`
+
+            ### Changes included:
+            - Created release branch \`release-${context.ref_name}\`
+            - Automatically generated documentation
+            - Bumped Helm chart version to \`${context.ref_name}\`
+
+            This PR was generated automatically by karpenter-provider-cluster-api/.github/workflows/release.yml
+            `
+            draft: false
+          });

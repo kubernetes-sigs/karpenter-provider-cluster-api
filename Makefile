@@ -70,3 +70,11 @@ vendor: ## update modules and populate local vendor directory
 	go mod tidy
 	go mod vendor
 	go mod verify
+
+.PHONY: docgen
+docgen: ## Generate documentation files
+	./hack/docgen.sh
+
+.PHONY: release
+release: ## Create a release branch, update chart version, and push changes
+	./hack/release.sh
