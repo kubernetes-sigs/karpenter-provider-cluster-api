@@ -8,5 +8,6 @@ approvers:
 
 reviewers:
   - faermanj
+  - maxcao13
   - cluster-api-maintainers
   - cluster-api-reviewers
