@@ -18,6 +18,7 @@ package operator
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/samber/lo"
@@ -73,7 +74,7 @@ func NewOperator(ctx context.Context, operator *operator.Operator) (context.Cont
 func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Operator) (client.Client, error) {
 	clusterAPIKubeConfig, err := buildClusterCAPIKubeConfig(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to build cluster API kube config: %w", err)
 	}
 
 	if clusterAPIKubeConfig != nil {
@@ -81,10 +82,10 @@ func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Op
 			o.Scheme = operator.GetScheme()
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to create new cluster for management cluster: %w", err)
 		}
 		if err = operator.Add(mgmtCluster); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to add management cluster to operator: %w", err)
 		}
 		return mgmtCluster.GetClient(), nil
 	}
