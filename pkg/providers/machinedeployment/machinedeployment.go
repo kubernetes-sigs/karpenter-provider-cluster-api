@@ -47,8 +47,9 @@ func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string
 	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, machineDeployment)
 	if err != nil {
 		machineDeployment = nil
+		return machineDeployment, fmt.Errorf("unable to get MachineDeployment %s in namespace %s: %w", name, namespace, err)
 	}
-	return machineDeployment, err
+	return machineDeployment, nil
 }
 
 func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error) {
@@ -70,7 +71,7 @@ func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelect
 	machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
 	err := p.kubeClient.List(ctx, machineDeploymentList, listOptions...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to list MachineDeployments with selector: %w", err)
 	}
 
 	for _, m := range machineDeploymentList.Items {

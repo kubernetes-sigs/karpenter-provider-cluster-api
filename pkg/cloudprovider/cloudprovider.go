@@ -251,7 +251,7 @@ func (c *CloudProvider) GetInstanceTypes(ctx context.Context, nodePool *karpv1.N
 
 	nodeClass, err := c.resolveNodeClassFromNodePool(ctx, nodePool)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to resolve NodeClass from NodePool %s: %w", nodePool.Name, err)
 	}
 
 	capiInstanceTypes, err := c.findInstanceTypesForNodeClass(ctx, nodeClass)
@@ -299,7 +299,7 @@ func (c *CloudProvider) List(ctx context.Context) ([]*karpv1.NodeClaim, error) {
 	for _, machine := range machines {
 		nodeClaim, err := c.machineToNodeClaim(ctx, machine)
 		if err != nil {
-			return []*karpv1.NodeClaim{}, err
+			return []*karpv1.NodeClaim{}, fmt.Errorf("unable to convert Machine %s to NodeClaim: %w", machine.Name, err)
 		}
 		nodeClaims = append(nodeClaims, nodeClaim)
 	}
@@ -326,7 +326,7 @@ func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machin
 
 	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, mdName, machine.GetNamespace())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get MachineDeployment %s for Machine %s: %w", mdName, machine.GetName(), err)
 	}
 
 	return machineDeployment, nil
@@ -341,7 +341,7 @@ func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeC
 
 	machineDeployments, err := c.machineDeploymentProvider.List(ctx, nodeClass.Spec.ScalableResourceSelector)
 	if err != nil {
-		return instanceTypes, err
+		return instanceTypes, fmt.Errorf("unable to list MachineDeployments for NodeClass %s: %w", nodeClass.Name, err)
 	}
 
 	for _, md := range machineDeployments {
@@ -458,7 +458,7 @@ func (c *CloudProvider) resolveNodeClassFromNodeClaim(ctx context.Context, nodeC
 	// if the kind and version differ from the included api then we will need to load differently.
 	// NodeClass and NodeClaim are not namespace scoped, this call can probably be changed.
 	if err := c.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: nodeClaim.Namespace}, nodeClass); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get NodeClass %s for NodeClaim %s: %w", name, nodeClaim.Name, err)
 	}
 
 	return nodeClass, nil
@@ -483,7 +483,7 @@ func (c *CloudProvider) resolveNodeClassFromNodePool(ctx context.Context, nodePo
 	// TODO (elmiko) add extra logic to get different resources from the class ref
 	// if the kind and version differ from the included api then we will need to load differently.
 	if err := c.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: nodePool.Namespace}, nodeClass); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get NodeClass %s for NodePool %s: %w", name, nodePool.Name, err)
 	}
 
 	return nodeClass, nil
