@@ -82,7 +82,7 @@ func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Op
 			o.Scheme = operator.GetScheme()
 		})
 		if err != nil {
-			return nil, fmt.Errorf("unable to create new cluster for management cluster: %w", err)
+			return nil, fmt.Errorf("unable to create new kube config for management cluster: %w", err)
 		}
 		if err = operator.Add(mgmtCluster); err != nil {
 			return nil, fmt.Errorf("unable to add management cluster to operator: %w", err)
