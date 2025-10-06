@@ -18,6 +18,7 @@ package status
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/awslabs/operatorpkg/status"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -63,7 +64,7 @@ func (c *Controller) Reconcile(ctx context.Context, nodeClass *v1alpha1.ClusterA
 			if errors.IsConflict(err) {
 				return reconcile.Result{Requeue: true}, nil
 			}
-			return reconcile.Result{}, err
+			return reconcile.Result{}, fmt.Errorf("unable to patch NodeClass status for %s: %w", nodeClass.Name, err)
 		}
 	}
 

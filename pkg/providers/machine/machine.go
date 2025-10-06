@@ -79,7 +79,7 @@ func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelect
 	machineList := &capiv1beta1.MachineList{}
 	err := p.kubeClient.List(ctx, machineList, listOptions...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to list machines with selector: %w", err)
 	}
 
 	for _, m := range machineList.Items {
