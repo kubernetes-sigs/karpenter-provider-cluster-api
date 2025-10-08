@@ -27,7 +27,8 @@ import (
 )
 
 type Provider interface {
-	Get(context.Context, string) (*capiv1beta1.Machine, error)
+	Get(context.Context, string, string) (*capiv1beta1.Machine, error)
+	GetByProviderID(context.Context, string) (*capiv1beta1.Machine, error)
 	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta1.Machine, error)
 	IsDeleting(*capiv1beta1.Machine) bool
 	AddDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
@@ -45,10 +46,19 @@ func NewDefaultProvider(_ context.Context, kubeClient client.Client) *DefaultPro
 	}
 }
 
-// Get returns the Machine indicated by the supplied Provider ID or nil if not found.
+func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string) (*capiv1beta1.Machine, error) {
+	machine := &capiv1beta1.Machine{}
+	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, machine)
+	if err != nil {
+		machine = nil
+	}
+	return machine, err
+}
+
+// GetByProviderID returns the Machine indicated by the supplied Provider ID or nil if not found.
 // Because Get is used with a provider ID, it may return a Machine that does not have
 // a label for node pool membership.
-func (p *DefaultProvider) Get(ctx context.Context, providerID string) (*capiv1beta1.Machine, error) {
+func (p *DefaultProvider) GetByProviderID(ctx context.Context, providerID string) (*capiv1beta1.Machine, error) {
 	machineList := &capiv1beta1.MachineList{}
 	err := p.kubeClient.List(ctx, machineList)
 	if err != nil {
