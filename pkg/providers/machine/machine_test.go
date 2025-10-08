@@ -77,7 +77,7 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 	})
 
 	It("returns nil when there are no Machines present in API", func() {
-		machine, err := provider.Get(context.Background(), "")
+		machine, err := provider.GetByProviderID(context.Background(), "")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machine).To(BeNil())
 	})
@@ -86,7 +86,7 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 		machine := newMachine("karpenter-1", "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		machine, err := provider.Get(context.Background(), "clusterapi://the-wrong-provider-id")
+		machine, err := provider.GetByProviderID(context.Background(), "clusterapi://the-wrong-provider-id")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machine).To(BeNil())
 	})
@@ -98,7 +98,7 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		providerID := *machine.Spec.ProviderID
-		machine, err := provider.Get(context.Background(), providerID)
+		machine, err := provider.GetByProviderID(context.Background(), providerID)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machine).Should(HaveField("Name", "karpenter-2"))
 	})
@@ -110,7 +110,7 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		providerID := *machine.Spec.ProviderID
-		machine, err := provider.Get(context.Background(), providerID)
+		machine, err := provider.GetByProviderID(context.Background(), providerID)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machine).Should(HaveField("Name", "karpenter-2"))
 	})
@@ -213,7 +213,7 @@ var _ = Describe("Machine DefaultProvider.AddDeleteAnnotation method", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() map[string]string {
-			m, err := provider.Get(context.Background(), *machine.Spec.ProviderID)
+			m, err := provider.GetByProviderID(context.Background(), *machine.Spec.ProviderID)
 			Expect(err).ToNot(HaveOccurred())
 			return m.GetAnnotations()
 		}).Should(HaveKey(capiv1beta1.DeleteMachineAnnotation))
@@ -263,7 +263,7 @@ var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func()
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() map[string]string {
-			m, err := provider.Get(context.Background(), *machine.Spec.ProviderID)
+			m, err := provider.GetByProviderID(context.Background(), *machine.Spec.ProviderID)
 			Expect(err).ToNot(HaveOccurred())
 			return m.GetAnnotations()
 		}).ShouldNot(HaveKey(capiv1beta1.DeleteMachineAnnotation))

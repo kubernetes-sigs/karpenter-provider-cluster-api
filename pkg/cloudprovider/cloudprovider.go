@@ -21,6 +21,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"log"
 	"slices"
 	"strings"
 	"sync"
@@ -56,6 +57,8 @@ const (
 	labelsKey       = "capacity.cluster-autoscaler.kubernetes.io/labels"
 	taintsKey       = "capacity.cluster-autoscaler.kubernetes.io/taints"
 	maxPodsKey      = "capacity.cluster-autoscaler.kubernetes.io/maxPods"
+
+	machineAnnotation = "cluster.x-k8s.io/machine"
 )
 
 func NewCloudProvider(ctx context.Context, kubeClient client.Client, machineProvider machine.Provider, machineDeploymentProvider machinedeployment.Provider) *CloudProvider {
@@ -89,67 +92,13 @@ func (c *CloudProvider) Create(ctx context.Context, nodeClaim *karpv1.NodeClaim)
 		return nil, fmt.Errorf("cannot satisfy create, NodeClaim is nil")
 	}
 
-	nodeClass, err := c.resolveNodeClassFromNodeClaim(ctx, nodeClaim)
+	machineDeployment, machine, err := c.provisionMachine(ctx, nodeClaim)
 	if err != nil {
-		return nil, fmt.Errorf("cannot satisfy create, unable to resolve NodeClass from NodeClaim %q: %w", nodeClaim.Name, err)
+		return nil, err
 	}
 
-	instanceTypes, err := c.findInstanceTypesForNodeClass(ctx, nodeClass)
-	if err != nil {
-		return nil, fmt.Errorf("cannot satisfy create, unable to get instance types for NodeClass %q of NodeClaim %q: %w", nodeClass.Name, nodeClaim.Name, err)
-	}
-
-	// identify which fit requirements
-	compatibleInstanceTypes := filterCompatibleInstanceTypes(instanceTypes, nodeClaim)
-	if len(compatibleInstanceTypes) == 0 {
-		return nil, cloudprovider.NewInsufficientCapacityError(fmt.Errorf("cannot satisfy create, no compatible instance types found"))
-	}
-
-	// TODO (elmiko) if multiple instance types are found to be compatible we need to select one.
-	// for now, we sort by resource name and take the first in the list. In the future, this should
-	// be an option or something more useful like minimum size or cost.
-	slices.SortFunc(compatibleInstanceTypes, func(a, b *ClusterAPIInstanceType) int {
-		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
-	})
-	selectedInstanceType := compatibleInstanceTypes[0]
-
-	// once scalable resource is identified, increase replicas
-	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, selectedInstanceType.MachineDeploymentName, selectedInstanceType.MachineDeploymentNamespace)
-	if err != nil {
-		return nil, fmt.Errorf("cannot satisfy create, unable to find MachineDeployment %q for InstanceType %q: %w", selectedInstanceType.MachineDeploymentName, selectedInstanceType.Name, err)
-	}
-	originalReplicas := *machineDeployment.Spec.Replicas
-	machineDeployment.Spec.Replicas = ptr.To(originalReplicas + 1)
-	if err := c.machineDeploymentProvider.Update(ctx, machineDeployment); err != nil {
-		return nil, fmt.Errorf("cannot satisfy create, unable to update MachineDeployment %q replicas: %w", machineDeployment.Name, err)
-	}
-
-	// TODO (elmiko) it would be nice to have a more elegant solution to the asynchronous machine creation.
-	// Initially, it appeared that we could have a Machine controller which could reconcile new Machines and
-	// then associate them with NodeClaims by using a sentinel value for the Provider ID. But, this may not
-	// work as we expect since the karpenter core can use the Provider ID as a key into one of its internal caches.
-	// For now, the method of waiting for the Machine seemed straightforward although it does make the `Create` method a blocking call.
-	// Try to find an unclaimed Machine resource for 1 minute.
-	machine, err := c.pollForUnclaimedMachineInMachineDeploymentWithTimeout(ctx, machineDeployment, time.Minute)
-	if err != nil {
-		// unable to find a Machine for the NodeClaim, this could be due to timeout or error, but the replica count needs to be reset.
-		// TODO (elmiko) this could probably use improvement to make it more resilient to errors.
-		machineDeployment.Spec.Replicas = ptr.To(originalReplicas)
-		if err := c.machineDeploymentProvider.Update(ctx, machineDeployment); err != nil {
-			return nil, fmt.Errorf("cannot satisfy create, error while recovering from failure to find an unclaimed Machine: %w", err)
-		}
-		return nil, fmt.Errorf("cannot satisfy create, unable to find an unclaimed Machine for MachineDeployment %q: %w", machineDeployment.Name, err)
-	}
-
-	// now that we have a Machine for the NodeClaim, we label it as a karpenter member
-	labels := machine.GetLabels()
-	labels[providers.NodePoolMemberLabel] = ""
-	machine.SetLabels(labels)
-	if err := c.machineProvider.Update(ctx, machine); err != nil {
-		// if we can't update the Machine with the member label, we need to unwind the addition
-		// TODO (elmiko) add more logic here to fix the error, if we are in this state it's not clear how to fix,
-		// since we have a Machine, we should be reducing the replicas and annotating the Machine for deletion.
-		return nil, fmt.Errorf("cannot satisfy create, unable to label Machine %q as a member: %w", machine.Name, err)
+	if machine.Spec.ProviderID == nil {
+		return nil, fmt.Errorf("cannot satisfy create, waiting for Machine %q to have ProviderID", machine.Name)
 	}
 
 	//  fill out nodeclaim with details
@@ -164,15 +113,29 @@ func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *karpv1.NodeClaim)
 	c.accessLock.Lock()
 	defer c.accessLock.Unlock()
 
-	if len(nodeClaim.Status.ProviderID) == 0 {
-		return fmt.Errorf("NodeClaim %q does not have a provider ID, cannot delete", nodeClaim.Name)
-	}
+	var machine *capiv1beta1.Machine
+	var err error
 
 	// find machine
-	machine, err := c.machineProvider.Get(ctx, nodeClaim.Status.ProviderID)
-	if err != nil {
-		return fmt.Errorf("error finding Machine with provider ID %q to Delete NodeClaim %q: %w", nodeClaim.Status.ProviderID, nodeClaim.Name, err)
+	if len(nodeClaim.Status.ProviderID) != 0 {
+		machine, err = c.machineProvider.GetByProviderID(ctx, nodeClaim.Status.ProviderID)
+		if err != nil {
+			return fmt.Errorf("error finding Machine with provider ID %q to Delete NodeClaim %q: %w", nodeClaim.Status.ProviderID, nodeClaim.Name, err)
+		}
+	} else if machineAnno, ok := nodeClaim.Annotations[machineAnnotation]; ok {
+		machineNamespace, machineName, err := parseMachineAnnotation(machineAnno)
+		if err != nil {
+			return fmt.Errorf("error parsing machine annotation: %w", err)
+		}
+
+		machine, err = c.machineProvider.Get(ctx, machineName, machineNamespace)
+		if err != nil {
+			return fmt.Errorf("error finding Machine %q in namespace %s to Delete NodeClaim %q: %w", machineName, machineNamespace, nodeClaim.Name, err)
+		}
+	} else {
+		return fmt.Errorf("NodeClaim %q does not have a provider ID or Machine annotations, cannot delete", nodeClaim.Name)
 	}
+
 	if machine == nil {
 		return cloudprovider.NewNodeClaimNotFoundError(fmt.Errorf("unable to find Machine with provider ID %q to Delete NodeClaim %q", nodeClaim.Status.ProviderID, nodeClaim.Name))
 	}
@@ -225,7 +188,7 @@ func (c *CloudProvider) Get(ctx context.Context, providerID string) (*karpv1.Nod
 		return nil, fmt.Errorf("no providerID supplied to Get, cannot continue")
 	}
 
-	machine, err := c.machineProvider.Get(ctx, providerID)
+	machine, err := c.machineProvider.GetByProviderID(ctx, providerID)
 	if err != nil {
 		return nil, fmt.Errorf("error getting Machine: %w", err)
 	}
@@ -316,6 +279,113 @@ func (c *CloudProvider) RepairPolicies() []cloudprovider.RepairPolicy {
 	// we could use from cluster-api to determine when repair should be initiated.
 
 	return []cloudprovider.RepairPolicy{}
+}
+
+// ProvisionMachine ensures a CAPI Machine exists for the given NodeClaim.
+// It creates the Machine if missing, or "gets" it to confirm the asynchronous provisioning status.
+func (c *CloudProvider) provisionMachine(ctx context.Context, nodeClaim *karpv1.NodeClaim) (*capiv1beta1.MachineDeployment, *capiv1beta1.Machine, error) {
+	machineAnno, ok := nodeClaim.Annotations[machineAnnotation]
+	if !ok {
+		return c.createMachine(ctx, nodeClaim)
+	}
+
+	machineNamespace, machineName, err := parseMachineAnnotation(machineAnno)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error parsing machine annotation: %w", err)
+	}
+
+	machine, err := c.machineProvider.Get(ctx, machineName, machineNamespace)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get NodeClaim's Machine %s : %w", machineName, err)
+	}
+
+	machineDeployment, err := c.machineDeploymentFromMachine(ctx, machine)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get NodeClaim's MachineDeployment %s : %w", machineName, err)
+	}
+
+	return machineDeployment, machine, nil
+}
+
+func (c *CloudProvider) createMachine(ctx context.Context, nodeClaim *karpv1.NodeClaim) (*capiv1beta1.MachineDeployment, *capiv1beta1.Machine, error) {
+	nodeClass, err := c.resolveNodeClassFromNodeClaim(ctx, nodeClaim)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot satisfy create, unable to resolve NodeClass from NodeClaim %q: %w", nodeClaim.Name, err)
+	}
+
+	instanceTypes, err := c.findInstanceTypesForNodeClass(ctx, nodeClass)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot satisfy create, unable to get instance types for NodeClass %q of NodeClaim %q: %w", nodeClass.Name, nodeClaim.Name, err)
+	}
+
+	// identify which fit requirements
+	compatibleInstanceTypes := filterCompatibleInstanceTypes(instanceTypes, nodeClaim)
+	if len(compatibleInstanceTypes) == 0 {
+		return nil, nil, cloudprovider.NewInsufficientCapacityError(fmt.Errorf("cannot satisfy create, no compatible instance types found"))
+	}
+
+	// TODO (elmiko) if multiple instance types are found to be compatible we need to select one.
+	// for now, we sort by resource name and take the first in the list. In the future, this should
+	// be an option or something more useful like minimum size or cost.
+	slices.SortFunc(compatibleInstanceTypes, func(a, b *ClusterAPIInstanceType) int {
+		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	})
+	selectedInstanceType := compatibleInstanceTypes[0]
+
+	// once scalable resource is identified, increase replicas
+	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, selectedInstanceType.MachineDeploymentName, selectedInstanceType.MachineDeploymentNamespace)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot satisfy create, unable to find MachineDeployment %q for InstanceType %q: %w", selectedInstanceType.MachineDeploymentName, selectedInstanceType.Name, err)
+	}
+	originalReplicas := *machineDeployment.Spec.Replicas
+	machineDeployment.Spec.Replicas = ptr.To(originalReplicas + 1)
+	if err := c.machineDeploymentProvider.Update(ctx, machineDeployment); err != nil {
+		return nil, nil, fmt.Errorf("cannot satisfy create, unable to update MachineDeployment %q replicas: %w", machineDeployment.Name, err)
+	}
+
+	// TODO (elmiko) it would be nice to have a more elegant solution to the asynchronous machine creation.
+	// Initially, it appeared that we could have a Machine controller which could reconcile new Machines and
+	// then associate them with NodeClaims by using a sentinel value for the Provider ID. But, this may not
+	// work as we expect since the karpenter core can use the Provider ID as a key into one of its internal caches.
+	// For now, the method of waiting for the Machine seemed straightforward although it does make the `Create` method a blocking call.
+	// Try to find an unclaimed Machine resource for 1 minute.
+	machine, err := c.pollForUnclaimedMachineInMachineDeploymentWithTimeout(ctx, machineDeployment, time.Minute)
+	if err != nil {
+		// unable to find a Machine for the NodeClaim, this could be due to timeout or error, but the replica count needs to be reset.
+		// TODO (elmiko) this could probably use improvement to make it more resilient to errors.
+		defer func() {
+			machineDeployment, err = c.machineDeploymentProvider.Get(ctx, selectedInstanceType.MachineDeploymentName, selectedInstanceType.MachineDeploymentNamespace)
+			if err != nil {
+				log.Println(fmt.Errorf("error while recovering from failure to find an unclaimed Machine, unable to find MachineDeployment %q for InstanceType %q: %w", selectedInstanceType.MachineDeploymentName, selectedInstanceType.Name, err))
+			}
+
+			machineDeployment.Spec.Replicas = ptr.To(originalReplicas)
+			if err = c.machineDeploymentProvider.Update(ctx, machineDeployment); err != nil {
+				log.Println(fmt.Errorf("error while recovering from failure to find an unclaimed Machine: %w", err))
+			}
+		}()
+
+		return nil, nil, fmt.Errorf("cannot satisfy create, unable to find an unclaimed Machine for MachineDeployment %q: %w", machineDeployment.Name, err)
+	}
+
+	// now that we have a Machine for the NodeClaim, we label it as a karpenter member
+	labels := machine.GetLabels()
+	labels[providers.NodePoolMemberLabel] = ""
+	machine.SetLabels(labels)
+	if err := c.machineProvider.Update(ctx, machine); err != nil {
+		// if we can't update the Machine with the member label, we need to unwind the addition
+		// TODO (elmiko) add more logic here to fix the error, if we are in this state it's not clear how to fix,
+		// since we have a Machine, we should be reducing the replicas and annotating the Machine for deletion.
+		return nil, nil, fmt.Errorf("cannot satisfy create, unable to label Machine %q as a member: %w", machine.Name, err)
+	}
+
+	// Bind the NodeClaim with this machine.
+	nodeClaim.Annotations[machineAnnotation] = fmt.Sprintf("%s/%s", machine.Namespace, machine.Name)
+	if err = c.kubeClient.Update(ctx, nodeClaim); err != nil {
+		return nil, nil, fmt.Errorf("cannot satisfy create, unable to update NodeClaim annotations %q: %w", nodeClaim.Name, err)
+	}
+
+	return machineDeployment, machine, nil
 }
 
 func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machine *capiv1beta1.Machine) (*capiv1beta1.MachineDeployment, error) {
@@ -421,15 +491,8 @@ func (c *CloudProvider) pollForUnclaimedMachineInMachineDeploymentWithTimeout(ct
 			return false, nil
 		}
 
-		// find the first machine with a provider id
-		for i, m := range machineList {
-			if m.Spec.ProviderID != nil {
-				machine = machineList[i]
-				return true, nil
-			}
-		}
-
-		return false, nil
+		machine = machineList[0]
+		return true, nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error polling for an unclaimed Machine in MachineDeployment %q: %w", machineDeployment.Name, err)
@@ -668,4 +731,21 @@ func zoneLabelFromLabels(labels map[string]string) string {
 	}
 
 	return zone
+}
+
+func parseMachineAnnotation(annotationValue string) (string, string, error) {
+	parts := strings.Split(annotationValue, "/")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid machine annotations '%s'. Expected 'namespace/name'", annotationValue)
+	}
+
+	ns := strings.TrimSpace(parts[0])
+	name := strings.TrimSpace(parts[1])
+
+	// Additional validation for empty strings
+	if ns == "" || name == "" {
+		return "", "", fmt.Errorf("invalid machine format '%s'. Namespace and name cannot be empty", annotationValue)
+	}
+
+	return ns, name, nil
 }

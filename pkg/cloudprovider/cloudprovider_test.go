@@ -103,7 +103,7 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		nodeClaim := karpv1.NodeClaim{}
 		nodeClaim.Name = "some-node-claim"
 		err := provider.Delete(context.Background(), &nodeClaim)
-		Expect(err).To(MatchError(fmt.Errorf("NodeClaim %q does not have a provider ID, cannot delete", nodeClaim.Name)))
+		Expect(err).To(MatchError(fmt.Errorf("NodeClaim %q does not have a provider ID or Machine annotations, cannot delete", nodeClaim.Name)))
 	})
 
 	It("returns an error when the referenced Machine is not found", func() {
@@ -193,7 +193,7 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() map[string]string {
-			m, err := provider.machineProvider.Get(context.Background(), providerID)
+			m, err := provider.machineProvider.GetByProviderID(context.Background(), providerID)
 			Expect(err).ToNot(HaveOccurred())
 			return m.GetAnnotations()
 		}).Should(HaveKey(capiv1beta1.DeleteMachineAnnotation))
