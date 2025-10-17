@@ -9,7 +9,7 @@ These instructions work best with the following versions and settings:
 
 | Component | Version |
 |-----------|---------|
-| karpenter-provider-cluster-api | 0.1.0 |
+| karpenter-provider-cluster-api | 0.2.0 |
 | cluster-api | 1.10 |
 | kubernetes | 1.33 |
 

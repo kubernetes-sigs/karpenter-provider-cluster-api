@@ -3,4 +3,4 @@ name: karpenter
 description: A Helm chart for Kubernetes that provides an implementation of Karpenter using Cluster API as the infrastructure provider
 type: application
 version: 0.1.0
-appVersion: "0.1.0"
+appVersion: "0.2.0"
