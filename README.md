@@ -28,7 +28,7 @@ The intention is for the Kubernetes community to use this experiment for learnin
 design pattern, feature gaps, and areas for improvement. With the ultimate goal being a standard release
 cycle and production ready Karpenter Cluster API provider.
 
-The `v0.1.0` release contains basic functionality for creating and deleting nodes within a cluster.
+The `v0.2.0` release contains basic functionality for creating and deleting nodes within a cluster.
 Please see the [quickstart instructions for more details](docs/docs/getting-started.md).
 
 The `main` branch is potentially unstable as we work towards compatibility with the latest versions
