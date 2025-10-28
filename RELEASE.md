@@ -7,4 +7,4 @@ The Kubernetes Template Project is released on an as-needed basis. The process i
 3. An OWNER runs `git tag -s $VERSION` and inserts the changelog and pushes the tag with `git push $VERSION`
 4. All [OWNERS](OWNERS) must approve the release PR automatically created by GitHub Actions
 5. The release issue is closed
-6. An announcement email is sent to `dev@kubernetes.io` with the subject `[ANNOUNCE] kubernetes-template-project $VERSION is released`
+6. An announcement email is sent to `sig-cluster-lifecycle@kubernetes.io` with the subject `[ANNOUNCE] Karpenter provider Cluster API $VERSION is released`
