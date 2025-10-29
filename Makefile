@@ -27,7 +27,9 @@ ARCH ?= $(shell go env GOARCH)
 
 CONTAINER_RUNTIME ?= docker
 BUILDER_IMAGE ?=
-IMG ?= karpenter-clusterapi-controller
+REGISTRY ?= gcr.io/k8s-staging-karpenter-cluster-api
+TAG ?= latest
+IMG ?= $(REGISTRY)/karpenter-clusterapi-controller:$(TAG)
 
 all: help
 
@@ -51,6 +53,13 @@ karpenter-clusterapi-controller: ## build the main karpenter controller
 .PHONY: image
 image: ## Build manager container image
 	$(CONTAINER_RUNTIME) build --build-arg BUILDER_IMAGE=$(BUILDER_IMAGE) --build-arg ARCH=$(ARCH) . -t $(IMG)
+
+.PHONY: image-push
+image-push: ## Push the manager container image to the container registry
+	$(CONTAINER_RUNTIME) push $(IMG)
+
+.PHONY: release-staging ## Build and push the staging image to the registry.
+release-staging: image image-push
 
 .PHONY: manifests
 manifests: ## generate the controller-gen kubernetes manifests
