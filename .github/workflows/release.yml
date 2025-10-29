@@ -25,20 +25,21 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
+          const tag = context.ref.replace("refs/tags/", '');
           await github.rest.pulls.create({
             owner: context.repo.owner,
             repo: context.repo.repo,
-            title: `chore(release): release ${context.ref_name} (automated)`,
-            head: `release-${context.ref_name}`,
+            title: `chore(release): release ${tag} (automated)`,
+            head: `release-${tag}`,
             base: 'main',
-            body: `Release Changes for \`${context.ref_name}\`
+            draft: false,
+            body: `Release Changes for \`${tag}\`
 
             ### Changes included:
-            - Created release branch \`release-${context.ref_name}\`
+            - Created release branch \`release-${tag}\`
             - Automatically generated documentation
-            - Bumped Helm chart version to \`${context.ref_name}\`
+            - Bumped Helm chart version to \`${tag}\`
 
             This PR was generated automatically by karpenter-provider-cluster-api/.github/workflows/release.yml
             `
-            draft: false
           });
