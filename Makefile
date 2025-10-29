@@ -26,10 +26,28 @@ CONTROLLER_GEN = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-tools/cmd/c
 ARCH ?= $(shell go env GOARCH)
 
 CONTAINER_RUNTIME ?= docker
+USE_DOCKER ?=
+ifeq ($(CONTAINER_RUNTIME), docker)
+	USE_DOCKER = -docker
+endif
+
 BUILDER_IMAGE ?=
-REGISTRY ?= gcr.io/k8s-staging-karpenter-cluster-api
-TAG ?= latest
-IMG ?= $(REGISTRY)/karpenter-clusterapi-controller:$(TAG)
+
+BUILDX_CMD ?= $(CONTAINER_RUNTIME) buildx
+IMG_BUILD_CMD ?= $(BUILDX_CMD) build
+
+IMG_REGISTRY ?= gcr.io/k8s-staging-karpenter-cluster-api
+IMG_NAME ?= karpenter-clusterapi-controller
+IMG_REPO ?= $(IMG_REGISTRY)/$(IMG_NAME)
+IMG_TAG ?= $(shell git describe --tags --dirty --always)
+IMG ?= $(IMG_REPO):$(IMG_TAG)
+
+ifdef EXTRA_TAG
+IMG_EXTRA_TAG ?= $(IMG_REPO):$(EXTRA_TAG)
+endif
+ifdef IMG_EXTRA_TAG
+IMG_BUILD_EXTRA_OPTS += -t $(IMG_EXTRA_TAG)
+endif
 
 all: help
 
@@ -50,16 +68,28 @@ generate: gen-objects manifests ## generate all controller-gen files
 karpenter-clusterapi-controller: ## build the main karpenter controller
 	go build -o bin/karpenter-clusterapi-controller cmd/controller/main.go
 
-.PHONY: image
-image: ## Build manager container image
-	$(CONTAINER_RUNTIME) build --build-arg BUILDER_IMAGE=$(BUILDER_IMAGE) --build-arg ARCH=$(ARCH) . -t $(IMG)
+# https://github.com/containers/buildah/issues/4671
+# podman/buildah does not support "buildx build --push"
+# Remove all this extra logic when it does
+.PHONY: image-build
+image-build:
+	$(IMG_BUILD_CMD) -t $(IMG) \
+		--build-arg BUILDER_IMAGE=$(BUILDER_IMAGE) \
+		--build-arg ARCH=$(ARCH) \
+		$(IMG_BUILD_EXTRA_OPTS) .
+	$(CONTAINER_RUNTIME) push $(IMG) $(IMG_EXTRA_TAG)
 
-.PHONY: image-push
-image-push: ## Push the manager container image to the container registry
-	$(CONTAINER_RUNTIME) push $(IMG)
+.PHONY: image-build-docker
+image-build-docker:
+	$(IMG_BUILD_CMD) -t $(IMG) \
+		--build-arg BUILDER_IMAGE=$(BUILDER_IMAGE) \
+		--build-arg ARCH=$(ARCH) \
+		$(PUSH) \
+		$(IMG_BUILD_EXTRA_OPTS) .
 
-.PHONY: release-staging ## Build and push the staging image to the registry.
-release-staging: image image-push
+.PHONY: image-push # Push the manager container image to the container IMG_REGISTRY
+image-push: PUSH=--push
+image-push: image-build$(USE_DOCKER)
 
 .PHONY: manifests
 manifests: ## generate the controller-gen kubernetes manifests
