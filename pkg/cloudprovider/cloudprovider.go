@@ -17,12 +17,11 @@ limitations under the License.
 package cloudprovider
 
 import (
-	"cmp"
 	"context"
 	_ "embed"
 	"fmt"
 	"log"
-	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -57,6 +57,8 @@ const (
 	labelsKey       = "capacity.cluster-autoscaler.kubernetes.io/labels"
 	taintsKey       = "capacity.cluster-autoscaler.kubernetes.io/taints"
 	maxPodsKey      = "capacity.cluster-autoscaler.kubernetes.io/maxPods"
+
+	priceKey = "cluster.x-k8s.io/machine-current-price"
 
 	machineAnnotation = "cluster.x-k8s.io/machine"
 )
@@ -327,10 +329,9 @@ func (c *CloudProvider) createMachine(ctx context.Context, nodeClaim *karpv1.Nod
 	// TODO (elmiko) if multiple instance types are found to be compatible we need to select one.
 	// for now, we sort by resource name and take the first in the list. In the future, this should
 	// be an option or something more useful like minimum size or cost.
-	slices.SortFunc(compatibleInstanceTypes, func(a, b *ClusterAPIInstanceType) int {
-		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+	selectedInstanceType := lo.MinBy(compatibleInstanceTypes, func(a, b *ClusterAPIInstanceType) bool {
+		return a.Offerings.Cheapest().Price < b.Offerings.Cheapest().Price
 	})
-	selectedInstanceType := compatibleInstanceTypes[0]
 
 	// once scalable resource is identified, increase replicas
 	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, selectedInstanceType.MachineDeploymentName, selectedInstanceType.MachineDeploymentNamespace)
@@ -644,20 +645,18 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 	capacity := capacityResourceListFromAnnotations(machineDeployment.GetAnnotations())
 	instanceType.Capacity = capacity
 
-	// TODO (elmiko) add offerings info, TBD of where this would come from
-	// start with zone, read from the label and add to offering
-	// initial price is 0
-	// there is a single offering, and it is available
 	zone := zoneLabelFromLabels(labels)
 	requirements = []*scheduling.Requirement{
 		scheduling.NewRequirement(corev1.LabelTopologyZone, corev1.NodeSelectorOpIn, zone),
 		scheduling.NewRequirement(karpv1.CapacityTypeLabelKey, corev1.NodeSelectorOpIn, karpv1.CapacityTypeOnDemand),
 	}
+	price := pricingFromMachineDeployment(machineDeployment)
+	available := price != 0.0
 	offerings := cloudprovider.Offerings{
 		&cloudprovider.Offering{
 			Requirements: scheduling.NewRequirements(requirements...),
-			Price:        0.0,
-			Available:    true,
+			Price:        price,
+			Available:    available,
 		},
 	}
 
@@ -748,4 +747,19 @@ func parseMachineAnnotation(annotationValue string) (string, string, error) {
 	}
 
 	return ns, name, nil
+}
+
+// pricingFromMachineDeployment returns the price from the annotations, or 0 if the price is not found or cannot be parsed
+func pricingFromMachineDeployment(machineDeployment *capiv1beta1.MachineDeployment) float64 {
+	priceAnnotation, found := machineDeployment.GetAnnotations()[priceKey]
+	if !found {
+		klog.InfoS("price annotation not found for MachineDeployment", "name", machineDeployment.Name)
+		return 0
+	}
+	priceFloat, err := strconv.ParseFloat(priceAnnotation, 64)
+	if err != nil {
+		klog.ErrorS(err, "error parsing price annotation for MachineDeployment", "name", machineDeployment.Name, "priceAnnotation", priceAnnotation)
+		return 0
+	}
+	return priceFloat
 }
