@@ -94,7 +94,7 @@ image-push: image-build$(USE_DOCKER)
 .PHONY: manifests
 manifests: ## generate the controller-gen kubernetes manifests
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./..." output:crd:artifacts:config=pkg/apis/crds
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./vendor/sigs.k8s.io/karpenter/..." output:crd:artifacts:config=pkg/apis/crds
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./vendor/sigs.k8s.io/karpenter/pkg/apis/..." output:crd:artifacts:config=pkg/apis/crds
 
 .PHONY: test
 test: vendor unit ## vendor the dependencies and run unit tests
