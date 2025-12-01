@@ -18,7 +18,7 @@ spec:
       serviceAccountName: {{ include "karpenter.serviceAccountName" . }}
       containers:
         - name: {{ .Chart.Name }}
-          image: {{ .Values.image.tag }}
+          image: {{ .Values.image.repo }}:{{ .Values.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - /karpenter-clusterapi-controller
