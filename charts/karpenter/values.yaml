@@ -6,8 +6,10 @@ fullnameOverride: ""
 replicaCount: 1
 
 image:
+  # -- Repo to use for the image
+  repo: gcr.io/k8s-staging-karpenter-cluster-api/karpenter-clusterapi-controller
   # -- Tag of the controller image
-  tag: karpenter-clusterapi-controller
+  tag: latest
   # -- Image pull policy of the controller image
   pullPolicy: IfNotPresent
 
