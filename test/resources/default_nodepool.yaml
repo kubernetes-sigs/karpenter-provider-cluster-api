@@ -1,0 +1,21 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        - key: "kubernetes.io/arch"
+          operator: In
+          values: ["amd64"]
+        - key: "node.cluster.x-k8s.io"
+          operator: In
+          values: ["workload-target"]
+        - key: "karpenter.sh/capacity-type"
+          operator: In
+          values: ["on-demand"]
+      nodeClassRef:
+        group: karpenter.cluster.x-k8s.io
+        kind: ClusterAPINodeClass
+        name: default

@@ -1,0 +1,81 @@
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  annotations:
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size: "10"
+    cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size: "0"
+    capacity.cluster-autoscaler.kubernetes.io/memory: "4G"
+    capacity.cluster-autoscaler.kubernetes.io/cpu: "2"
+    capacity.cluster-autoscaler.kubernetes.io/ephemeral-disk: "100Gi"
+    capacity.cluster-autoscaler.kubernetes.io/maxPods: "110"
+    capacity.cluster-autoscaler.kubernetes.io/labels: kubernetes.io/arch=amd64,karpenter.sh/capacity-type=on-demand,node.kubernetes.io/instance-type=kubemark-0,topology.kubernetes.io/zone=us-east-1a
+    cluster.x-k8s.io/machine-current-price: "0.50" # not supported yet
+  labels:
+    node.cluster.x-k8s.io/karpenter-member: ""
+  name: km-wl-kubemark-md-0
+  namespace: default
+spec:
+  clusterName: km-cp
+  replicas: 0
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: km-cp
+      cluster.x-k8s.io/deployment-name: km-wl-kubemark-md-0
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: km-cp
+        cluster.x-k8s.io/deployment-name: km-wl-kubemark-md-0
+        node.cluster.x-k8s.io: workload-target
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
+          name: km-wl-kubemark-md-0
+      clusterName: km-cp
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+        kind: KubemarkMachineTemplate
+        name: km-wl-kubemark-md-0
+      version: v1.32.8
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+kind: KubemarkMachineTemplate
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: km-cp
+  name: km-wl-kubemark-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      extraMounts:
+        - name: containerd-sock
+          containerPath: /run/containerd/containerd.sock
+          hostPath: /run/containerd/containerd.sock
+          type: Socket
+      # these kubemarkOptions are required for karpenter
+      kubemarkOptions:
+        extendedResources:
+          cpu: 2
+          memory: 4Gi
+        registerWithTaints:
+          - key: karpenter.sh/unregistered
+            effect: NoExecute
+        nodeLabels:
+          karpenter.sh/capacity-type: on-demand
+          node.kubernetes.io/instance-type: kubemark-0
+          topology.kubernetes.io/zone: us-east-1a
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
+metadata:
+  name: km-wl-kubemark-md-0
+  namespace: default
+spec:
+  template:
+    spec:
+      joinConfiguration:
+        nodeRegistration:
+          name: ''

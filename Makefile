@@ -14,6 +14,8 @@
 
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 
+KWOK_REPO ?= kind.local
+
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.31.0
 ENVTEST = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
@@ -117,3 +119,16 @@ docgen: ## Generate documentation files
 .PHONY: release
 release: ## Create a release branch, update chart version, and push changes
 	./hack/release.sh
+
+.PHONY: build-with-ko
+build-with-ko: ## Build the Karpenter CAPI controller image using ko build
+	$(eval CONTROLLER_IMG=$(shell KO_DOCKER_REPO="$(KWOK_REPO)" ko build -B sigs.k8s.io/karpenter-provider-cluster-api/cmd/controller))
+	$(eval IMG_REPOSITORY=$(shell echo $(CONTROLLER_IMG) | cut -d ":" -f 1))
+	$(eval IMG_TAG=latest)
+
+# TODO(maxcao13): replace with helm
+# Note, this requires a configmap with the name "mgmt-kubeconfig" with management cluster kubeconfig contents
+.PHONY: apply
+apply: build-with-ko ## Deploy the Karpenter CAPI controller from the current state of your git repository into your ~/.kube/config cluster
+	kubectl apply -f pkg/apis/crds/
+	sed 's|REPLACE_IMAGE|$(IMG_REPOSITORY):$(IMG_TAG)|g' test/resources/karpenter-install.yaml | kubectl apply -f -

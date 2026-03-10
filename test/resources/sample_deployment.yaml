@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scale-up
+  labels:
+    app: scale-up
+  namespace: default
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: scale-up
+  template:
+    metadata:
+      labels:
+        app: scale-up
+    spec:
+      nodeSelector:
+        karpenter.sh/nodepool: default
+      affinity:
+      # make sure pods run on different nodes
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - topologyKey: "kubernetes.io/hostname"
+            labelSelector:
+              matchLabels:
+                app: scale-up
+      containers:
+        - name: busybox
+          image: quay.io/elmiko/busybox
+          resources:
+            requests:
+              memory: "200M" 
+              cpu: "100m"
+          command:
+            - /bin/sh
+            - "-c"
+            - "echo 'this should be in the logs' && sleep 86400"
+      terminationGracePeriodSeconds: 0

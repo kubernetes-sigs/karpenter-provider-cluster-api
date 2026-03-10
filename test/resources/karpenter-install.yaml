@@ -1,0 +1,172 @@
+# TODO(maxcao13): deprecate in favor of helm chart install
+# this manifest is intended to setup for smoketesting with kubemark CAPI and the e2e tests
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: karpenter
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: karpenter
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: karpenter
+  labels:
+    app.kubernetes.io/name: karpenter
+rules:
+  - apiGroups: ["karpenter.sh"]
+    resources: ["nodepools", "nodepools/status", "nodeclaims", "nodeclaims/status"]
+    verbs: ["get", "list", "watch", "create", "delete", "update", "patch"]
+  - apiGroups: ["karpenter.sh"]
+    resources: ["nodepools/finalizers", "nodeclaims/finalizers"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["karpenter.cluster.x-k8s.io"]
+    resources: ["clusterapinodeclasses", "clusterapinodeclasses/status"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  - apiGroups: ["cluster.x-k8s.io"]
+    resources: ["machines", "machinedeployments"]
+    verbs: ["get", "watch", "list", "update"]
+  - apiGroups: [""]
+    resources: ["pods", "nodes", "persistentvolumes", "persistentvolumeclaims", "replicationcontrollers", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "csinodes", "volumeattachments"]
+    verbs: ["get", "watch", "list"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+    verbs: ["list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "patch"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["patch", "delete", "update"]
+  - apiGroups: [""]
+    resources: ["pods/eviction"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: karpenter
+  labels:
+    app.kubernetes.io/name: karpenter
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: karpenter
+subjects:
+  - kind: ServiceAccount
+    name: karpenter
+    namespace: kube-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: karpenter
+  namespace: kube-system
+  labels:
+    app.kubernetes.io/name: karpenter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: karpenter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: karpenter
+    spec:
+      serviceAccountName: karpenter
+      priorityClassName: system-cluster-critical
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: karpenter
+          image: REPLACE_IMAGE # this is replaced when we do 'make apply'
+          imagePullPolicy: Never
+          command:
+            - /ko-app/controller
+          args:
+            - --leader-election-namespace=kube-system
+            - --cluster-api-kubeconfig=/etc/karpenter/mgmt-kubeconfig
+          env:
+            - name: SYSTEM_NAMESPACE
+              value: kube-system
+            - name: LOG_LEVEL
+              value: "debug"
+            - name: HEALTH_PROBE_PORT
+              value: "8081"
+            - name: METRICS_PORT
+              value: "8080"
+          ports:
+            - name: http-metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: http-health
+              containerPort: 8081
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http-health
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http-health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: mgmt-kubeconfig
+              mountPath: /etc/karpenter
+      # note this requires a config map to have been created that contains the management
+      # cluster kubeconfig contents that can be referenced from the tenant cluster
+      volumes:
+        - name: mgmt-kubeconfig
+          configMap:
+            name: mgmt-kubeconfig
+            items:
+              - key: kubeconfig
+                path: mgmt-kubeconfig
+      tolerations:
+        - key: "node-role.kubernetes.io/master"
+          operator: "Exists"
+          effect: "NoSchedule"
+        - key: "node-role.kubernetes.io/control-plane"
+          operator: "Exists"
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: Exists
