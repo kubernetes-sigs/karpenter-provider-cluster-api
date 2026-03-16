@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-CAPK_VERSION=v0.10.0
+CAPK_VERSION=main
 CAPI_VERSION=release-1.10
 CALICO_VERSION=v3.24.1
 DEFAULT_KIND_IMAGE=kindest/node:v1.32.8
