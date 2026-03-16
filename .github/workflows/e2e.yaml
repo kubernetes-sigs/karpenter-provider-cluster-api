@@ -21,6 +21,7 @@ jobs:
       shell: bash
       run: |
         ./test/hack/e2e.sh
+        echo "hello world"
       env:
         KIND_CLUSTER_IMAGE: kindest/node:v1.32.8
     - name: cleanup 
