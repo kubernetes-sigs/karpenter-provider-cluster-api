@@ -29,7 +29,7 @@ import (
 type Provider interface {
 	Get(context.Context, string, string) (*capiv1beta1.Machine, error)
 	GetByProviderID(context.Context, string) (*capiv1beta1.Machine, error)
-	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta1.Machine, error)
+	List(context.Context, string, *metav1.LabelSelector) ([]*capiv1beta1.Machine, error)
 	IsDeleting(*capiv1beta1.Machine) bool
 	AddDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
 	RemoveDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
@@ -74,10 +74,15 @@ func (p *DefaultProvider) GetByProviderID(ctx context.Context, providerID string
 	return nil, nil
 }
 
-func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelector) ([]*capiv1beta1.Machine, error) {
+func (p *DefaultProvider) List(ctx context.Context, namespace string, selector *metav1.LabelSelector) ([]*capiv1beta1.Machine, error) {
 	machines := []*capiv1beta1.Machine{}
 
 	listOptions := []client.ListOption{}
+
+	if namespace != "" {
+		listOptions = append(listOptions, client.InNamespace(namespace))
+	}
+
 	if selector != nil {
 		sm, err := metav1.LabelSelectorAsSelector(selector)
 		if err != nil {

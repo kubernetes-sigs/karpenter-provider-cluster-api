@@ -48,12 +48,12 @@ var _ = Describe("Machine DefaultProvider.IsDeleting method", func() {
 	})
 
 	It("return false when Machine deletion timestamp is zero", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		Expect(provider.IsDeleting(machine)).To(BeFalse())
 	})
 
 	It("return true when Machine deletion timestamp is not zero", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		timestamp := metav1.NewTime(time.Now())
 		machine.SetDeletionTimestamp(&timestamp)
 		Expect(provider.IsDeleting(machine)).To(BeTrue())
@@ -83,7 +83,7 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 	})
 
 	It("returns nil when there is no Machine with the requested provider ID", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		machine, err := provider.GetByProviderID(context.Background(), "clusterapi://the-wrong-provider-id")
@@ -92,9 +92,9 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 	})
 
 	It("returns the expected Machine when it is present in the API", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
-		machine = newMachine("karpenter-2", "karpenter-cluster", true)
+		machine = newMachine("karpenter-2", testNamespace, "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		providerID := *machine.Spec.ProviderID
@@ -104,9 +104,9 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 	})
 
 	It("returns the expected Machine when it is present in the API and not a NodePool member", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
-		machine = newMachine("karpenter-2", "karpenter-cluster", false)
+		machine = newMachine("karpenter-2", testNamespace, "karpenter-cluster", false)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		providerID := *machine.Spec.ProviderID
@@ -133,48 +133,75 @@ var _ = Describe("Machine DefaultProvider.List method", func() {
 	})
 
 	AfterEach(func() {
-		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
-		Eventually(func() client.ObjectList {
-			machineList := &capiv1beta1.MachineList{}
-			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
-			return machineList
-		}).Should(HaveField("Items", HaveLen(0)))
+		for _, ns := range []string{testNamespace, otherTestNamespace} {
+			Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(ns))).To(Succeed())
+			Eventually(func() client.ObjectList {
+				machineList := &capiv1beta1.MachineList{}
+				Expect(cl.List(context.Background(), machineList, client.InNamespace(ns))).To(Succeed())
+				return machineList
+			}).Should(HaveField("Items", HaveLen(0)))
+		}
 	})
 
 	It("returns an empty list when no Machines are present in API", func() {
-		machines, err := provider.List(context.Background(), &NodePoolMemberLabelSelector)
+		machines, err := provider.List(context.Background(), testNamespace, &NodePoolMemberLabelSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(0))
 	})
 
 	It("returns a list of correct length when there are only karpenter member Machines", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		machines, err := provider.List(context.Background(), &NodePoolMemberLabelSelector)
+		machines, err := provider.List(context.Background(), testNamespace, &NodePoolMemberLabelSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(1))
 	})
 
 	It("returns a list of correct length when there are mixed member Machines", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		machine = newMachine("clusterapi-1", "workload-cluster", false)
+		machine = newMachine("clusterapi-1", testNamespace, "workload-cluster", false)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		machines, err := provider.List(context.Background(), &NodePoolMemberLabelSelector)
+		machines, err := provider.List(context.Background(), testNamespace, &NodePoolMemberLabelSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(1))
 	})
 
 	It("returns an empty list when no member Machines are present", func() {
-		machine := newMachine("clusterapi-1", "workload-cluster", false)
+		machine := newMachine("clusterapi-1", testNamespace, "workload-cluster", false)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		machines, err := provider.List(context.Background(), &NodePoolMemberLabelSelector)
+		machines, err := provider.List(context.Background(), testNamespace, &NodePoolMemberLabelSelector)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machines).To(HaveLen(0))
+	})
+
+	It("returns only Machines from the specified namespace", func() {
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machine = newMachine("karpenter-1", otherTestNamespace, "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machines, err := provider.List(context.Background(), testNamespace, &NodePoolMemberLabelSelector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machines).To(HaveLen(1))
+		Expect(machines[0].Namespace).To(Equal(testNamespace))
+	})
+
+	It("returns Machines from all namespaces when namespace is empty", func() {
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machine = newMachine("karpenter-1", otherTestNamespace, "karpenter-cluster", true)
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		machines, err := provider.List(context.Background(), "", &NodePoolMemberLabelSelector)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(machines).To(HaveLen(2))
 	})
 })
 
@@ -200,13 +227,13 @@ var _ = Describe("Machine DefaultProvider.AddDeleteAnnotation method", func() {
 	})
 
 	It("returns an error when the Machine does not exist", func() {
-		machine := newMachine("non-existent", "fake-cluster", false)
+		machine := newMachine("non-existent", testNamespace, "fake-cluster", false)
 		err := provider.AddDeleteAnnotation(context.Background(), machine)
 		Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("unable to add deletion annotation to Machine %q", machine.Name))))
 	})
 
 	It("adds the deletion annotation", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		err := provider.AddDeleteAnnotation(context.Background(), machine)
@@ -242,7 +269,7 @@ var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func()
 	})
 
 	It("returns an error when the Machine does not exist", func() {
-		machine := newMachine("non-existent", "fake-cluster", false)
+		machine := newMachine("non-existent", testNamespace, "fake-cluster", false)
 		annotations := map[string]string{
 			capiv1beta1.DeleteMachineAnnotation: time.Now().String(),
 		}
@@ -252,7 +279,7 @@ var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func()
 	})
 
 	It("removes the deletion annotation", func() {
-		machine := newMachine("karpenter-1", "karpenter-cluster", true)
+		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		annotations := map[string]string{
 			capiv1beta1.DeleteMachineAnnotation: time.Now().String(),
 		}
@@ -270,10 +297,10 @@ var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func()
 	})
 })
 
-func newMachine(machineName string, clusterName string, karpenterMember bool) *capiv1beta1.Machine {
+func newMachine(machineName string, machineNamespace string, clusterName string, karpenterMember bool) *capiv1beta1.Machine {
 	machine := &capiv1beta1.Machine{}
 	machine.SetName(machineName)
-	machine.SetNamespace(testNamespace)
+	machine.SetNamespace(machineNamespace)
 	if karpenterMember {
 		labels := map[string]string{}
 		labels[providers.NodePoolMemberLabel] = ""
