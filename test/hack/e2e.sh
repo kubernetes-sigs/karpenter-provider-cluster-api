@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-CAPK_VERSION=v0.10.0
+CAPK_VERSION=v0.10.1
 CAPI_VERSION=release-1.10
 CALICO_VERSION=v3.24.1
 DEFAULT_KIND_IMAGE=kindest/node:v1.32.8
@@ -16,11 +16,6 @@ if [[ ! -d cluster-api-provider-kubemark ]]; then
 fi
 
 CAPK_HACK="$WORKSPACE/cluster-api-provider-kubemark/hack"
-
-# TODO(maxcao13): kubemark v0.10.0 is using golang.org/x/tools@v0.24.0 which is incompatible with go1.25
-# https://github.com/golang/go/issues/7446
-go mod -C "$CAPK_HACK/tools" edit -replace=golang.org/x/tools=golang.org/x/tools@v0.24.1
-go mod -C "$CAPK_HACK/tools" tidy && go mod -C "$CAPK_HACK/tools" download
 
 if [[ ! -d cluster-api ]]; then
   git clone https://github.com/kubernetes-sigs/cluster-api.git -b "$CAPI_VERSION" --single-branch
