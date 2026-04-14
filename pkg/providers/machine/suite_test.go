@@ -34,7 +34,8 @@ import (
 )
 
 const (
-	testNamespace = "karpenter-cluster-api"
+	testNamespace      = "karpenter-cluster-api"
+	otherTestNamespace = "other-namespace"
 )
 
 func init() {
@@ -77,6 +78,10 @@ var _ = BeforeSuite(func() {
 	namespace := &corev1.Namespace{}
 	namespace.SetName(testNamespace)
 	Expect(cl.Create(context.Background(), namespace)).To(Succeed())
+
+	otherNamespace := &corev1.Namespace{}
+	otherNamespace.SetName(otherTestNamespace)
+	Expect(cl.Create(context.Background(), otherNamespace)).To(Succeed())
 })
 
 var _ = AfterSuite(func() {

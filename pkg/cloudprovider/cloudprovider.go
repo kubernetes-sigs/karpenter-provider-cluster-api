@@ -253,7 +253,7 @@ func (c *CloudProvider) List(ctx context.Context) ([]*karpv1.NodeClaim, error) {
 			},
 		},
 	}
-	machines, err := c.machineProvider.List(ctx, &selector)
+	machines, err := c.machineProvider.List(ctx, "", &selector)
 	if err != nil {
 		return nil, fmt.Errorf("listing machines, %w", err)
 	}
@@ -482,7 +482,7 @@ func (c *CloudProvider) pollForUnclaimedMachineInMachineDeploymentWithTimeout(ct
 	}
 
 	err := wait.PollUntilContextTimeout(ctx, time.Second, timeout, true, func(ctx context.Context) (bool, error) {
-		machineList, err := c.machineProvider.List(ctx, selector)
+		machineList, err := c.machineProvider.List(ctx, machineDeployment.Namespace, selector)
 		if err != nil {
 			// this might need to ignore the error for the sake of the timeout
 			return false, fmt.Errorf("error listing unclaimed Machines for MachineDeployment %q: %w", machineDeployment.Name, err)
