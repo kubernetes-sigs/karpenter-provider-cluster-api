@@ -720,6 +720,96 @@ var _ = Describe("machineDeploymentToInstanceType function", func() {
 	})
 })
 
+var _ = Describe("isBelowMaxSize function", func() {
+	It("returns false when MachineDeployment is nil", func() {
+		Expect(isBelowMaxSize(nil)).To(BeFalse())
+	})
+
+	It("returns true when no max size annotation is present", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(5))
+		Expect(isBelowMaxSize(md)).To(BeTrue())
+	})
+
+	It("returns true when replicas are below max size", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(3))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+		}
+		Expect(isBelowMaxSize(md)).To(BeTrue())
+	})
+
+	It("returns false when replicas equal max size", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(10))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+		}
+		Expect(isBelowMaxSize(md)).To(BeFalse())
+	})
+
+	It("returns false when replicas exceed max size", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(12))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+		}
+		Expect(isBelowMaxSize(md)).To(BeFalse())
+	})
+
+	It("returns true when max size annotation is not a valid integer", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(5))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMaxSizeAnnotation: "not-a-number",
+		}
+		Expect(isBelowMaxSize(md)).To(BeTrue())
+	})
+
+	It("returns true when replicas is nil (defaults to 0)", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = nil
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+		}
+		Expect(isBelowMaxSize(md)).To(BeTrue())
+	})
+
+	It("returns false when max size is 0", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(0))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMaxSizeAnnotation: "0",
+		}
+		Expect(isBelowMaxSize(md)).To(BeFalse())
+	})
+})
+
+var _ = Describe("machineDeploymentToInstanceType max size behavior", func() {
+	It("sets offering Available to false when replicas are at max size", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(10))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+		}
+		instanceType := machineDeploymentToInstanceType(md)
+		Expect(instanceType.Offerings).To(HaveLen(1))
+		Expect(instanceType.Offerings[0]).To(HaveField("Available", false))
+	})
+
+	It("sets offering Available to true when replicas are below max size", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(3))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+		}
+		instanceType := machineDeploymentToInstanceType(md)
+		Expect(instanceType.Offerings).To(HaveLen(1))
+		Expect(instanceType.Offerings[0]).To(HaveField("Available", true))
+	})
+})
+
 func newMachine(machineName string, clusterName string, karpenterMember bool) *capiv1beta1.Machine {
 	machine := &capiv1beta1.Machine{}
 	machine.SetName(machineName)
