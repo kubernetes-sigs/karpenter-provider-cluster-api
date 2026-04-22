@@ -12,7 +12,7 @@ jobs:
     if: github.repository == 'kubernetes-sigs/karpenter-provider-cluster-api'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # tag=v6.0.2
       with:
         fetch-depth: 0
     - run: make docgen
@@ -21,7 +21,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPO: ${{ github.repository }}
     - name: create pull request
-      uses: actions/github-script@v9
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # tag=v9.0.0
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
