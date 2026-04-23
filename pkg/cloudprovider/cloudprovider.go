@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -611,7 +612,8 @@ func filterCompatibleInstanceTypes(instanceTypes []*ClusterAPIInstanceType, node
 	filteredInstances := lo.Filter(instanceTypes, func(i *ClusterAPIInstanceType, _ int) bool {
 		// TODO (elmiko) if/when we have offering availability, this is a good place to filter out unavailable instance types
 		return reqs.Compatible(i.Requirements, scheduling.AllowUndefinedWellKnownLabels) == nil &&
-			resources.Fits(nodeClaim.Spec.Resources.Requests, i.Allocatable())
+			resources.Fits(nodeClaim.Spec.Resources.Requests, i.Allocatable()) &&
+			i.Offerings.Available().HasCompatible(reqs)
 	})
 
 	return filteredInstances
@@ -629,6 +631,25 @@ func labelsFromScaleFromZeroAnnotation(annotation string) map[string]string {
 	}
 
 	return labels
+}
+
+// isBelowMaxSize checks if the MachineDeployment's current replicas are below the max size
+// defined by the Cluster Autoscaler annotation. If the annotation is not present or cannot
+// be parsed, it returns true (no limit enforced).
+func isBelowMaxSize(machineDeployment *capiv1beta1.MachineDeployment) bool {
+	if machineDeployment == nil {
+		return false
+	}
+	maxSizeStr, ok := machineDeployment.Annotations[capiv1beta1.AutoscalerMaxSizeAnnotation]
+	if !ok {
+		return true
+	}
+	maxSize, err := strconv.Atoi(maxSizeStr)
+	if err != nil {
+		return true
+	}
+	replicas := int(ptr.Deref(machineDeployment.Spec.Replicas, 0))
+	return replicas < maxSize
 }
 
 func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *ClusterAPIInstanceType {
@@ -657,7 +678,7 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 		&cloudprovider.Offering{
 			Requirements: scheduling.NewRequirements(requirements...),
 			Price:        0.0,
-			Available:    true,
+			Available:    isBelowMaxSize(machineDeployment),
 		},
 	}
 
