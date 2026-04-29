@@ -51,6 +51,8 @@ ifdef IMG_EXTRA_TAG
 IMG_BUILD_EXTRA_OPTS += -t $(IMG_EXTRA_TAG)
 endif
 
+KARPENTER_CORE_DIR ?= $(shell go list -m -f '{{ .Dir }}' sigs.k8s.io/karpenter)
+
 all: help
 
 .PHONY: build
@@ -132,3 +134,18 @@ build-with-ko: ## Build the Karpenter CAPI controller image using ko build
 apply: build-with-ko ## Deploy the Karpenter CAPI controller from the current state of your git repository into your ~/.kube/config cluster
 	kubectl apply -f pkg/apis/crds/
 	sed 's|REPLACE_IMAGE|$(IMG_REPOSITORY):$(IMG_TAG)|g' test/resources/karpenter-install.yaml | kubectl apply -f -
+
+.PHONY: upstream-e2etests
+upstream-e2etests: FOCUS ?= Performance # TODO(maxcao13): support more regression tests
+upstream-e2etests:
+	cd $(KARPENTER_CORE_DIR) && go test \
+		-count 1 \
+		-timeout 3.25h \
+		-v \
+		./test/suites/regression \
+		--ginkgo.focus="$(FOCUS)" \
+		--ginkgo.timeout=3h \
+		--ginkgo.grace-period=5m \
+		--ginkgo.vv \
+		--default-nodeclass="$(shell pwd)/test/pkg/environment/capi/default_capinodeclass.yaml" \
+		--default-nodepool="$(shell pwd)/test/pkg/environment/capi/default_nodepool.yaml"
