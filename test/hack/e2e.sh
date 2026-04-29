@@ -4,7 +4,7 @@ set -euo pipefail
 
 CAPK_VERSION=v0.10.1
 CAPI_VERSION=release-1.10
-CALICO_VERSION=v3.24.1
+CALICO_VERSION=v3.31.5
 DEFAULT_KIND_IMAGE=kindest/node:v1.32.8
 
 WORKSPACE="${WORKSPACE:-$(pwd)}"
