@@ -9,21 +9,22 @@ set -euo pipefail
 
 REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 
-WORKSPACE="${WORKSPACE:-$(pwd)}"
-mkdir -p "$WORKSPACE"
-cd "$WORKSPACE"
+CLONE_WORKSPACE="${CLONE_WORKSPACE:-${WORKSPACE:-$REPO_ROOT}}"
+mkdir -p "$CLONE_WORKSPACE"
+cd "$CLONE_WORKSPACE"
+CLONE_WORKSPACE=$(pwd)
 
-if [[ ! -d cluster-api-provider-kubemark ]]; then
+if [[ ! -d $CLONE_WORKSPACE/cluster-api-provider-kubemark ]]; then
   git clone https://github.com/kubernetes-sigs/cluster-api-provider-kubemark.git -b "$CAPK_VERSION" --single-branch
 fi
 
-CAPK_HACK="$WORKSPACE/cluster-api-provider-kubemark/hack"
+CAPK_HACK="$CLONE_WORKSPACE/cluster-api-provider-kubemark/hack"
 
-if [[ ! -d cluster-api ]]; then
+if [[ ! -d $CLONE_WORKSPACE/cluster-api ]]; then
   git clone https://github.com/kubernetes-sigs/cluster-api.git -b "$CAPI_VERSION" --single-branch
 fi
 
-export CAPI_PATH="$WORKSPACE/cluster-api"
+export CAPI_PATH="$CLONE_WORKSPACE/cluster-api"
 
 # don't run the entire suite with make -C cluster-api-provider-kubemark/hack/tests test-e2e
 # we want to create our own machine deployments and scale them up with karpenter
@@ -62,4 +63,5 @@ sed -i "s|server: .*|server: https://${KIND_CP_IP}:6443|g" /tmp/mgmt.kubeconfig
 sed -i '/certificate-authority-data:/d' /tmp/mgmt.kubeconfig
 sed -i '/server: https:\/\//a\    insecure-skip-tls-verify: true' /tmp/mgmt.kubeconfig
 $TENANT_KUBECTL create configmap mgmt-kubeconfig \
-  --from-file=kubeconfig=/tmp/mgmt.kubeconfig -n kube-system
+  --from-file=kubeconfig=/tmp/mgmt.kubeconfig -n kube-system --dry-run=client -o yaml | \
+  $TENANT_KUBECTL apply -f -

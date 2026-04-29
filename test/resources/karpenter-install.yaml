@@ -93,7 +93,7 @@ spec:
       securityContext:
         runAsNonRoot: true
       containers:
-        - name: karpenter
+        - name: controller
           image: REPLACE_IMAGE # this is replaced when we do 'make apply'
           imagePullPolicy: Never
           command:
