@@ -165,3 +165,4 @@ func (p *DefaultProvider) Update(ctx context.Context, machine *capiv1beta1.Machi
 
 	return nil
 }
+
