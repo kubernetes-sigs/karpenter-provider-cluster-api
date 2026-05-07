@@ -21,7 +21,7 @@ ENVTEST_K8S_VERSION = 1.32.0
 ENVTEST = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-runtime/tools/setup-envtest
 
 GINKGO = go run ${PROJECT_DIR}/vendor/github.com/onsi/ginkgo/v2/ginkgo
-GINKGO_ARGS = -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=30m
+GINKGO_ARGS = -v --randomize-all --randomize-suites --keep-going --race --trace --timeout=30m --skip-package=cluster-api,cluster-api-provider-kubemark
 
 CONTROLLER_GEN = go run ${PROJECT_DIR}/vendor/sigs.k8s.io/controller-tools/cmd/controller-gen
 
@@ -50,6 +50,8 @@ endif
 ifdef IMG_EXTRA_TAG
 IMG_BUILD_EXTRA_OPTS += -t $(IMG_EXTRA_TAG)
 endif
+
+KARPENTER_CORE_DIR ?= $(shell go list -m -f '{{ .Dir }}' sigs.k8s.io/karpenter)
 
 all: help
 
@@ -132,3 +134,37 @@ build-with-ko: ## Build the Karpenter CAPI controller image using ko build
 apply: build-with-ko ## Deploy the Karpenter CAPI controller from the current state of your git repository into your ~/.kube/config cluster
 	kubectl apply -f pkg/apis/crds/
 	sed 's|REPLACE_IMAGE|$(IMG_REPOSITORY):$(IMG_TAG)|g' test/resources/karpenter-install.yaml | kubectl apply -f -
+
+.PHONY: upstream-e2etests
+upstream-e2etests: FOCUS ?= Performance # TODO(maxcao13): support more regression tests
+upstream-e2etests:
+	cd $(KARPENTER_CORE_DIR) && go test \
+		-count 1 \
+		-timeout 2h \
+		-v \
+		./test/suites/regression \
+		--ginkgo.focus="$(FOCUS)" \
+		--ginkgo.timeout=2h \
+		--ginkgo.grace-period=15m \
+		--ginkgo.vv \
+		--default-nodeclass="$(shell pwd)/test/pkg/environment/capi/default_capinodeclass.yaml" \
+		--default-nodepool="$(shell pwd)/test/pkg/environment/capi/default_nodepool.yaml"
+
+CAPI_MANAGEMENT_KUBECONFIG ?= $(HOME)/.kube/config
+
+# TEST_SUITE selects a specific test suite directory to run "make e2etests" against
+TEST_SUITE ?= "..."
+
+.PHONY: e2etests
+e2etests: ## Run the provider e2e suite against your local cluster
+	CAPI_MANAGEMENT_KUBECONFIG=$(CAPI_MANAGEMENT_KUBECONFIG) go test \
+		-count 1 \
+		-timeout 2h \
+		-v \
+		./test/suites/$(shell echo $(TEST_SUITE) | tr A-Z a-z)/... \
+		--ginkgo.focus="$(FOCUS)" \
+		--ginkgo.timeout=2h \
+		--ginkgo.grace-period=5m \
+		--ginkgo.vv \
+		--default-nodeclass="$(shell pwd)/test/pkg/environment/capi/default_capinodeclass.yaml" \
+		--default-nodepool="$(shell pwd)/test/pkg/environment/capi/default_nodepool.yaml"
