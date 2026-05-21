@@ -58,6 +58,7 @@ const (
 	labelsKey       = "capacity.cluster-autoscaler.kubernetes.io/labels"
 	taintsKey       = "capacity.cluster-autoscaler.kubernetes.io/taints"
 	maxPodsKey      = "capacity.cluster-autoscaler.kubernetes.io/maxPods"
+	priceKey        = "capacity.cluster-autoscaler.kubernetes.io/price"
 
 	machineAnnotation = "cluster.x-k8s.io/machine"
 )
@@ -161,23 +162,26 @@ func (c *CloudProvider) Delete(ctx context.Context, nodeClaim *karpv1.NodeClaim)
 		return fmt.Errorf("unable to delete NodeClaim %q, MachineDeployment %q is already at zero replicas", nodeClaim.Name, machineDeployment.Name)
 	}
 
+	if isAtMinSize(machineDeployment) {
+		return fmt.Errorf("unable to delete NodeClaim %q, MachineDeployment %q is at its minimum replica count", nodeClaim.Name, machineDeployment.Name)
+	}
+
 	// mark the machine for deletion before decrementing replicas to protect against the wrong machine being removed
 	err = c.machineProvider.AddDeleteAnnotation(ctx, machine)
 	if err != nil {
 		return fmt.Errorf("unable to delete NodeClaim %q, cannot annotate Machine %q for deletion: %w", nodeClaim.Name, machine.Name, err)
 	}
 
-	//   and reduce machinedeployment replicas
+	// reduce machinedeployment replicas via patch to avoid resource-version conflicts
 	updatedReplicas := *machineDeployment.Spec.Replicas - 1
-	machineDeployment.Spec.Replicas = ptr.To(updatedReplicas)
-	err = c.machineDeploymentProvider.Update(ctx, machineDeployment)
+	err = c.machineDeploymentProvider.Scale(ctx, machineDeployment, updatedReplicas)
 	if err != nil {
 		// cleanup the machine delete annotation so we don't affect future replica changes
 		if err := c.machineProvider.RemoveDeleteAnnotation(ctx, machine); err != nil {
 			return fmt.Errorf("unable to delete NodeClaim %q, cannot remove delete annotation for Machine %q during cleanup: %w", nodeClaim.Name, machine.Name, err)
 		}
 
-		return fmt.Errorf("unable to delete NodeClaim %q, cannot update MachineDeployment %q replicas: %w", nodeClaim.Name, machineDeployment.Name, err)
+		return fmt.Errorf("unable to delete NodeClaim %q, cannot scale MachineDeployment %q replicas: %w", nodeClaim.Name, machineDeployment.Name, err)
 	}
 
 	return nil
@@ -338,10 +342,9 @@ func (c *CloudProvider) createMachine(ctx context.Context, nodeClaim *karpv1.Nod
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot satisfy create, unable to find MachineDeployment %q for InstanceType %q: %w", selectedInstanceType.MachineDeploymentName, selectedInstanceType.Name, err)
 	}
-	originalReplicas := *machineDeployment.Spec.Replicas
-	machineDeployment.Spec.Replicas = ptr.To(originalReplicas + 1)
-	if err := c.machineDeploymentProvider.Update(ctx, machineDeployment); err != nil {
-		return nil, nil, fmt.Errorf("cannot satisfy create, unable to update MachineDeployment %q replicas: %w", machineDeployment.Name, err)
+	originalReplicas := ptr.Deref(machineDeployment.Spec.Replicas, 0)
+	if err := c.machineDeploymentProvider.Scale(ctx, machineDeployment, originalReplicas+1); err != nil {
+		return nil, nil, fmt.Errorf("cannot satisfy create, unable to scale MachineDeployment %q replicas: %w", machineDeployment.Name, err)
 	}
 
 	// TODO (elmiko) it would be nice to have a more elegant solution to the asynchronous machine creation.
@@ -358,10 +361,9 @@ func (c *CloudProvider) createMachine(ctx context.Context, nodeClaim *karpv1.Nod
 			machineDeployment, err = c.machineDeploymentProvider.Get(ctx, selectedInstanceType.MachineDeploymentName, selectedInstanceType.MachineDeploymentNamespace)
 			if err != nil {
 				log.Println(fmt.Errorf("error while recovering from failure to find an unclaimed Machine, unable to find MachineDeployment %q for InstanceType %q: %w", selectedInstanceType.MachineDeploymentName, selectedInstanceType.Name, err))
+				return
 			}
-
-			machineDeployment.Spec.Replicas = ptr.To(originalReplicas)
-			if err = c.machineDeploymentProvider.Update(ctx, machineDeployment); err != nil {
+			if err = c.machineDeploymentProvider.Scale(ctx, machineDeployment, originalReplicas); err != nil {
 				log.Println(fmt.Errorf("error while recovering from failure to find an unclaimed Machine: %w", err))
 			}
 		}()
@@ -416,6 +418,9 @@ func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeC
 	}
 
 	for _, md := range machineDeployments {
+		if md.Spec.Paused {
+			continue
+		}
 		it := machineDeploymentToInstanceType(md)
 		instanceTypes = append(instanceTypes, it)
 	}
@@ -652,6 +657,25 @@ func isBelowMaxSize(machineDeployment *capiv1beta1.MachineDeployment) bool {
 	return replicas < maxSize
 }
 
+// isAtMinSize checks if the MachineDeployment's current replicas are at or below the min size
+// defined by the Cluster Autoscaler annotation. If the annotation is not present or cannot
+// be parsed, it returns false (no floor enforced). This prevents scaling below the minimum.
+func isAtMinSize(machineDeployment *capiv1beta1.MachineDeployment) bool {
+	if machineDeployment == nil {
+		return false
+	}
+	minSizeStr, ok := machineDeployment.Annotations[capiv1beta1.AutoscalerMinSizeAnnotation]
+	if !ok {
+		return false
+	}
+	minSize, err := strconv.Atoi(minSizeStr)
+	if err != nil || minSize <= 0 {
+		return false
+	}
+	replicas := int(ptr.Deref(machineDeployment.Spec.Replicas, 0))
+	return replicas <= minSize
+}
+
 func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *ClusterAPIInstanceType {
 	instanceType := &ClusterAPIInstanceType{}
 
@@ -665,10 +689,16 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 	capacity := capacityResourceListFromAnnotations(machineDeployment.GetAnnotations())
 	instanceType.Capacity = capacity
 
-	// TODO (elmiko) add offerings info, TBD of where this would come from
-	// start with zone, read from the label and add to offering
-	// initial price is 0
-	// there is a single offering, and it is available
+	// Read price from annotation; defaults to 0.0 if not present or invalid.
+	price := 0.0
+	if priceStr, ok := machineDeployment.GetAnnotations()[priceKey]; ok {
+		if p, err := strconv.ParseFloat(priceStr, 64); err == nil {
+			price = p
+		}
+	}
+
+	// Offerings are unavailable if the MachineDeployment is paused or at max capacity.
+	// Paused MDs shouldn't be targeted for new nodes. Max capacity prevents overscaling.
 	zone := zoneLabelFromLabels(labels)
 	requirements = []*scheduling.Requirement{
 		scheduling.NewRequirement(corev1.LabelTopologyZone, corev1.NodeSelectorOpIn, zone),
@@ -677,21 +707,20 @@ func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeplo
 	offerings := cloudprovider.Offerings{
 		&cloudprovider.Offering{
 			Requirements: scheduling.NewRequirements(requirements...),
-			Price:        0.0,
-			Available:    isBelowMaxSize(machineDeployment),
+			Price:        price,
+			Available:    isBelowMaxSize(machineDeployment) && !machineDeployment.Spec.Paused,
 		},
 	}
 
 	instanceType.Offerings = offerings
 
-	// TODO (elmiko) find a better way to learn the instance type. The instance name needs to be the same
-	// as the well-known `node.kubernetes.io/instance-type` that will be on resulting nodes. Usually, a
-	// cloud controller, or similar, mechanism is used to apply this label.
-	// For now, we check the labels we know about from the MachineDeployment, if the instance type label
-	// is not there, leave it blank.
-	// to the v1.LabelInstanceTypeStable. if karpenter expects this to match the node, then we need to get this value through capi.
-	// TODO (jkyros) Add a test case to test this behavior
+	// Instance type name defaults to the well-known label if present; falls back to MD name.
+	// The name must match the node.kubernetes.io/instance-type label on resulting nodes, or
+	// Karpenter's disruption engine won't find the corresponding InstanceType.
 	instanceType.Name = labels[corev1.LabelInstanceTypeStable]
+	if instanceType.Name == "" {
+		instanceType.Name = machineDeployment.Name
+	}
 
 	// TODO (elmiko) add the proper overhead information, not sure where we will harvest this information.
 	// perhaps it needs to be a configurable option somewhere.

@@ -201,6 +201,61 @@ var _ = Describe("MachineDeployment DefaultProvider.Update method", func() {
 	})
 })
 
+var _ = Describe("MachineDeployment DefaultProvider.Scale method", func() {
+	var provider Provider
+
+	BeforeEach(func() {
+		provider = NewDefaultProvider(context.Background(), cl)
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineDeploymentList
+		}).Should(HaveField("Items", HaveLen(0)))
+	})
+
+	It("returns an error when the MachineDeployment does not exist", func() {
+		machineDeployment := newMachineDeployment("non-existant", "fake-cluster", true)
+		err := provider.Scale(context.Background(), machineDeployment, 5)
+		Expect(err).Should(MatchError(ContainSubstring(fmt.Sprintf("unable to scale MachineDeployment %q", machineDeployment.Name))))
+	})
+
+	It("scales the MachineDeployment replicas to the target count", func() {
+		machineDeployment := newMachineDeployment("md-1", "karpenter-cluster", true)
+		machineDeployment.Spec.Replicas = ptr.To(int32(1))
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		targetReplicas := int32(3)
+		err := provider.Scale(context.Background(), machineDeployment, targetReplicas)
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() *capiv1beta1.MachineDeployment {
+			md, err := provider.Get(context.Background(), machineDeployment.Name, machineDeployment.Namespace)
+			Expect(err).ToNot(HaveOccurred())
+			return md
+		}).Should(HaveField("Spec", HaveField("Replicas", ptr.To(targetReplicas))))
+	})
+
+	It("scales down the MachineDeployment replicas", func() {
+		machineDeployment := newMachineDeployment("md-1", "karpenter-cluster", true)
+		machineDeployment.Spec.Replicas = ptr.To(int32(5))
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		targetReplicas := int32(2)
+		err := provider.Scale(context.Background(), machineDeployment, targetReplicas)
+		Expect(err).ToNot(HaveOccurred())
+
+		Eventually(func() *capiv1beta1.MachineDeployment {
+			md, err := provider.Get(context.Background(), machineDeployment.Name, machineDeployment.Namespace)
+			Expect(err).ToNot(HaveOccurred())
+			return md
+		}).Should(HaveField("Spec", HaveField("Replicas", ptr.To(targetReplicas))))
+	})
+})
+
 func newMachineDeployment(name string, clusterName string, karpenterMember bool) *capiv1beta1.MachineDeployment {
 	machineDeployment := &capiv1beta1.MachineDeployment{}
 	machineDeployment.SetName(name)

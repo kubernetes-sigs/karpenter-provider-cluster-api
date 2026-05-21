@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
@@ -30,6 +31,7 @@ type Provider interface {
 	Get(context.Context, string, string) (*capiv1beta1.MachineDeployment, error)
 	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error)
 	Update(context.Context, *capiv1beta1.MachineDeployment) error
+	Scale(context.Context, *capiv1beta1.MachineDeployment, int32) error
 }
 
 type DefaultProvider struct {
@@ -87,5 +89,17 @@ func (p *DefaultProvider) Update(ctx context.Context, machineDeployment *capiv1b
 		return fmt.Errorf("unable to update MachineDeployment %q: %w", machineDeployment.Name, err)
 	}
 
+	return nil
+}
+
+// Scale patches the MachineDeployment replica count to the given value. Using Patch rather than
+// Update avoids resource-version conflicts when the CAPI controller has modified the object
+// concurrently (e.g. updating status) between the caller's Get and the write.
+func (p *DefaultProvider) Scale(ctx context.Context, machineDeployment *capiv1beta1.MachineDeployment, replicas int32) error {
+	patch := client.MergeFrom(machineDeployment.DeepCopy())
+	machineDeployment.Spec.Replicas = ptr.To(replicas)
+	if err := p.kubeClient.Patch(ctx, machineDeployment, patch); err != nil {
+		return fmt.Errorf("unable to scale MachineDeployment %q to %d replicas: %w", machineDeployment.Name, replicas, err)
+	}
 	return nil
 }

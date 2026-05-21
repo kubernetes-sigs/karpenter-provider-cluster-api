@@ -206,6 +206,28 @@ var _ = Describe("CloudProvider.Delete method", func() {
 			return md
 		}).Should(HaveField("Spec", HaveField("Replicas", ptr.To(int32(1)))))
 	})
+
+	It("returns an error when the MachineDeployment is at its minimum replica count", func() {
+		machineDeployment := newMachineDeployment("md-1", "test-cluster", true)
+		machineDeployment.Spec.Replicas = ptr.To(int32(1))
+		machineDeployment.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMinSizeAnnotation: "1",
+		}
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := *machine.Spec.ProviderID
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim := karpv1.NodeClaim{
+			Status: karpv1.NodeClaimStatus{
+				ProviderID: providerID,
+			},
+		}
+		err := provider.Delete(context.Background(), &nodeClaim)
+		Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("MachineDeployment %q is at its minimum replica count", machineDeployment.Name))))
+	})
 })
 
 var _ = Describe("CloudProvider.Get method", func() {
@@ -786,6 +808,72 @@ var _ = Describe("isBelowMaxSize function", func() {
 	})
 })
 
+var _ = Describe("isAtMinSize function", func() {
+	It("returns false when MachineDeployment is nil", func() {
+		Expect(isAtMinSize(nil)).To(BeFalse())
+	})
+
+	It("returns false when no min size annotation is present", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(1))
+		Expect(isAtMinSize(md)).To(BeFalse())
+	})
+
+	It("returns true when replicas equal min size", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(1))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMinSizeAnnotation: "1",
+		}
+		Expect(isAtMinSize(md)).To(BeTrue())
+	})
+
+	It("returns false when replicas exceed min size", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(3))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMinSizeAnnotation: "1",
+		}
+		Expect(isAtMinSize(md)).To(BeFalse())
+	})
+
+	It("returns true when replicas are below min size", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(0))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMinSizeAnnotation: "1",
+		}
+		Expect(isAtMinSize(md)).To(BeTrue())
+	})
+
+	It("returns false when min size annotation is not a valid integer", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(1))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMinSizeAnnotation: "not-a-number",
+		}
+		Expect(isAtMinSize(md)).To(BeFalse())
+	})
+
+	It("returns false when min size is 0 or negative", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = ptr.To(int32(0))
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMinSizeAnnotation: "0",
+		}
+		Expect(isAtMinSize(md)).To(BeFalse())
+	})
+
+	It("returns false when replicas is nil (defaults to 0) but min size is 1", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Replicas = nil
+		md.Annotations = map[string]string{
+			capiv1beta1.AutoscalerMinSizeAnnotation: "1",
+		}
+		Expect(isAtMinSize(md)).To(BeTrue())
+	})
+})
+
 var _ = Describe("machineDeploymentToInstanceType max size behavior", func() {
 	It("sets offering Available to false when replicas are at max size", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
@@ -807,6 +895,48 @@ var _ = Describe("machineDeploymentToInstanceType max size behavior", func() {
 		instanceType := machineDeploymentToInstanceType(md)
 		Expect(instanceType.Offerings).To(HaveLen(1))
 		Expect(instanceType.Offerings[0]).To(HaveField("Available", true))
+	})
+
+	It("sets offering Available to false when MachineDeployment is paused", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Paused = true
+		instanceType := machineDeploymentToInstanceType(md)
+		Expect(instanceType.Offerings).To(HaveLen(1))
+		Expect(instanceType.Offerings[0]).To(HaveField("Available", false))
+	})
+
+	It("reads price from annotation when present", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Annotations = map[string]string{
+			priceKey: "0.50",
+		}
+		instanceType := machineDeploymentToInstanceType(md)
+		Expect(instanceType.Offerings).To(HaveLen(1))
+		Expect(instanceType.Offerings[0]).To(HaveField("Price", 0.50))
+	})
+
+	It("defaults to price 0.0 when annotation is absent", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		instanceType := machineDeploymentToInstanceType(md)
+		Expect(instanceType.Offerings).To(HaveLen(1))
+		Expect(instanceType.Offerings[0]).To(HaveField("Price", 0.0))
+	})
+
+	It("defaults to price 0.0 when annotation value is invalid", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Annotations = map[string]string{
+			priceKey: "not-a-number",
+		}
+		instanceType := machineDeploymentToInstanceType(md)
+		Expect(instanceType.Offerings).To(HaveLen(1))
+		Expect(instanceType.Offerings[0]).To(HaveField("Price", 0.0))
+	})
+
+	It("uses MachineDeployment name as fallback when instance type label is absent", func() {
+		md := newMachineDeployment("md-1", "test-cluster", true)
+		md.Spec.Template.Labels = map[string]string{}
+		instanceType := machineDeploymentToInstanceType(md)
+		Expect(instanceType.Name).To(Equal(md.Name))
 	})
 })
 
