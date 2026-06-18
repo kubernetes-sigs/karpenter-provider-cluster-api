@@ -6,7 +6,7 @@ steps:
 - name: 'gcr.io/k8s-staging-test-infra/gcb-docker-gcloud:latest'
   entrypoint: make
   env:
-    - IMG_REPO=gcr.io/k8s-staging-karpenter-cluster-api/karpenter-clusterapi-controller
+    - IMG_REPO=us-central1-docker.pkg.dev/k8s-staging-images/karpenter-cluster-api
     - IMG_TAG=$_GIT_TAG
     - EXTRA_TAG=$_PULL_BASE_REF
     - DOCKER_BUILDX_CMD=/buildx-entrypoint
