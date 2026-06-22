@@ -7,7 +7,7 @@ replicaCount: 1
 
 image:
   # -- Repo to use for the image
-  repo: gcr.io/k8s-staging-karpenter-cluster-api/karpenter-clusterapi-controller
+  repo: us-central1-docker.pkg.dev/k8s-staging-images/karpenter-cluster-api/controller
   # -- Tag of the controller image
   tag: latest
   # -- Image pull policy of the controller image
