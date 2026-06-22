@@ -38,8 +38,8 @@ BUILDER_IMAGE ?=
 BUILDX_CMD ?= $(CONTAINER_RUNTIME) buildx
 IMG_BUILD_CMD ?= $(BUILDX_CMD) build
 
-IMG_REGISTRY ?= gcr.io/k8s-staging-karpenter-cluster-api
-IMG_NAME ?= karpenter-clusterapi-controller
+IMG_REGISTRY ?= us-central1-docker.pkg.dev/k8s-staging-images/karpenter-cluster-api
+IMG_NAME ?= controller
 IMG_REPO ?= $(IMG_REGISTRY)/$(IMG_NAME)
 IMG_TAG ?= $(shell git describe --tags --dirty --always)
 IMG ?= $(IMG_REPO):$(IMG_TAG)
