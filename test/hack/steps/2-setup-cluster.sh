@@ -41,6 +41,20 @@ make -C "$CAPK_HACK/tests" .docker-build
 make -C "$CAPK_HACK/tests" .create-local-repository
 make -C "$CAPK_HACK/tests" .config-local-repository
 make -C "$CAPK_HACK/tests" .deploy-cluster-api
+
+# TODO(maxcao13): This is a hack to wait for the KubeadmControlPlane webhook to become ready
+# e2es sometimes fail because of race conditions where the webhook with failurePolicy set to Fail exists but can't serve,
+# and we immediately try to create the offending object in .create-tenant-cluster-control-plane.
+echo "Waiting for KubeadmControlPlane webhook..."
+DEADLINE=$((SECONDS + 60))
+until kubectl create --dry-run=server -f "$CAPK_HACK/tests/resources/docker-control-plane.yaml" 2>/dev/null; do
+  if (( SECONDS >= DEADLINE )); then
+    echo "Timed out waiting for webhook to become ready"
+    exit 1
+  fi
+  sleep 5
+done
+
 make -C "$CAPK_HACK/tests" .create-tenant-cluster-control-plane
 # make -C "$CAPK_HACK/tests" .create-tenant-cluster-hollow-nodes # purposefully ignoring
 make -C "$CAPK_HACK/tests" .generate-tenant-cluster-kubeconfig
