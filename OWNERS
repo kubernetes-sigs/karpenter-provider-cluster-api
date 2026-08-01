@@ -1,7 +1,7 @@
-# See the OWNERS docs at https://go.k8s.io/owners
+# see the OWNERS docs at https://go.k8s.io/owners
 
 approvers:
-  - elmiko
+  - pathum-author 
   - sig-cluster-lifecycle-leads
   - cluster-api-admins
   - cluster-api-maintainers
@@ -11,3 +11,4 @@ reviewers:
   - maxcao13
   - cluster-api-maintainers
   - cluster-api-reviewers
+- Pathum25 author 
