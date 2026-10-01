@@ -28,8 +28,30 @@ jobs:
         ./test/hack/e2e.sh
       env:
         KIND_CLUSTER_IMAGE: kindest/node:v1.32.8@sha256:abd489f042d2b644e2d033f5c2d900bc707798d075e8186cb65e3f1367a9d5a1
+    - name: install controller
+      shell: bash
+      run: |
+        export KUBECONFIG=/tmp/km.kubeconfig
+        export KWOK_REPO=kind.local
+        export KIND_CLUSTER_NAME=km-cp
+        make apply
+    - name: ping cluster
+      shell: bash
+      run: |
+        export KUBECONFIG=/tmp/km.kubeconfig
+        sleep 15
+        kubectl get pods -n kube-system | grep karpenter
+        kubectl get nodepools
+        kubectl get pods -A
+        kubectl describe nodes
+    - name: run test suites
+      shell: bash
+      run: |
+        export KUBECONFIG=/tmp/km.kubeconfig
+        kubectl taint nodes --selector='node-role.kubernetes.io/control-plane' CriticalAddonsOnly:NoSchedule
+        make upstream-e2etests
     - name: cleanup 
       shell: bash
       run: | 
         kind delete cluster --name km-cp
-        kind delete cluster
+        kind delete cluster --name kind
