@@ -76,4 +76,4 @@ the architecture and implementation of this provider.
 [kubernetes]: https://kubernetes.io
 [clusterapi]: https://cluster-api.sigs.k8s.io
 [kci]: https://github.com/kubernetes-sigs/karpenter/blob/main/pkg/cloudprovider/types.go
-[cakfg]: https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/community/20231018-karpenter-integration.md
+[cakfg]: https://github.com/kubernetes-sigs/cluster-api/blob/main/docs/community/retired/20231018-karpenter-integration.md
