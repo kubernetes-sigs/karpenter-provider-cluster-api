@@ -1,4 +1,4 @@
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
   annotations:
@@ -30,12 +30,12 @@ spec:
     spec:
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          apiGroup: bootstrap.cluster.x-k8s.io
           kind: KubeadmConfigTemplate
           name: km-wl-kubemark-md-0
       clusterName: km-cp
       infrastructureRef:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha4
+        apiGroup: infrastructure.cluster.x-k8s.io
         kind: KubemarkMachineTemplate
         name: km-wl-kubemark-md-0
       version: v1.32.8

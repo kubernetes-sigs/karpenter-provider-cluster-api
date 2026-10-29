@@ -24,13 +24,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 )
 
 // fakeMachineProvider implements machine.Provider for unit tests.
 type fakeMachineProvider struct {
 	mu       sync.Mutex
-	machines map[string]*capiv1beta1.Machine // keyed by "namespace/name"
+	machines map[string]*capiv1beta2.Machine // keyed by "namespace/name"
 
 	GetCallCount              atomic.Int64
 	ListCallCount             atomic.Int64
@@ -47,7 +47,7 @@ type fakeMachineProvider struct {
 
 func newFakeMachineProvider() *fakeMachineProvider {
 	return &fakeMachineProvider{
-		machines: make(map[string]*capiv1beta1.Machine),
+		machines: make(map[string]*capiv1beta2.Machine),
 	}
 }
 
@@ -55,13 +55,13 @@ func (f *fakeMachineProvider) key(ns, name string) string {
 	return ns + "/" + name
 }
 
-func (f *fakeMachineProvider) AddMachine(m *capiv1beta1.Machine) {
+func (f *fakeMachineProvider) AddMachine(m *capiv1beta2.Machine) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.machines[f.key(m.Namespace, m.Name)] = m.DeepCopy()
 }
 
-func (f *fakeMachineProvider) GetMachine(name, ns string) *capiv1beta1.Machine {
+func (f *fakeMachineProvider) GetMachine(name, ns string) *capiv1beta2.Machine {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if m, ok := f.machines[f.key(ns, name)]; ok {
@@ -70,7 +70,7 @@ func (f *fakeMachineProvider) GetMachine(name, ns string) *capiv1beta1.Machine {
 	return nil
 }
 
-func (f *fakeMachineProvider) Get(_ context.Context, name string, namespace string) (*capiv1beta1.Machine, error) {
+func (f *fakeMachineProvider) Get(_ context.Context, name string, namespace string) (*capiv1beta2.Machine, error) {
 	f.GetCallCount.Add(1)
 	if f.GetError != nil {
 		return nil, f.GetError
@@ -84,11 +84,11 @@ func (f *fakeMachineProvider) Get(_ context.Context, name string, namespace stri
 	return m.DeepCopy(), nil
 }
 
-func (f *fakeMachineProvider) GetByProviderID(_ context.Context, _ string) (*capiv1beta1.Machine, error) {
+func (f *fakeMachineProvider) GetByProviderID(_ context.Context, _ string) (*capiv1beta2.Machine, error) {
 	return nil, fmt.Errorf("not implemented in fake")
 }
 
-func (f *fakeMachineProvider) List(_ context.Context, namespace string, selector *metav1.LabelSelector) ([]*capiv1beta1.Machine, error) {
+func (f *fakeMachineProvider) List(_ context.Context, namespace string, selector *metav1.LabelSelector) ([]*capiv1beta2.Machine, error) {
 	f.ListCallCount.Add(1)
 	if f.ListError != nil {
 		return nil, f.ListError
@@ -101,7 +101,7 @@ func (f *fakeMachineProvider) List(_ context.Context, namespace string, selector
 		return nil, err
 	}
 
-	var result []*capiv1beta1.Machine
+	var result []*capiv1beta2.Machine
 	for _, m := range f.machines {
 		if namespace != "" && m.Namespace != namespace {
 			continue
@@ -114,11 +114,11 @@ func (f *fakeMachineProvider) List(_ context.Context, namespace string, selector
 	return result, nil
 }
 
-func (f *fakeMachineProvider) IsDeleting(m *capiv1beta1.Machine) bool {
+func (f *fakeMachineProvider) IsDeleting(m *capiv1beta2.Machine) bool {
 	return m != nil && !m.GetDeletionTimestamp().IsZero()
 }
 
-func (f *fakeMachineProvider) AddDeleteAnnotation(_ context.Context, m *capiv1beta1.Machine) error {
+func (f *fakeMachineProvider) AddDeleteAnnotation(_ context.Context, m *capiv1beta2.Machine) error {
 	f.AddDeleteAnnotationCount.Add(1)
 	if f.AddDeleteAnnotationError != nil {
 		return f.AddDeleteAnnotationError
@@ -133,12 +133,12 @@ func (f *fakeMachineProvider) AddDeleteAnnotation(_ context.Context, m *capiv1be
 	if annotations == nil {
 		annotations = map[string]string{}
 	}
-	annotations[capiv1beta1.DeleteMachineAnnotation] = "true"
+	annotations[capiv1beta2.DeleteMachineAnnotation] = "true"
 	stored.SetAnnotations(annotations)
 	return nil
 }
 
-func (f *fakeMachineProvider) RemoveDeleteAnnotation(_ context.Context, m *capiv1beta1.Machine) error {
+func (f *fakeMachineProvider) RemoveDeleteAnnotation(_ context.Context, m *capiv1beta2.Machine) error {
 	f.RemoveDeleteAnnotationCount.Add(1)
 	if f.RemoveDeleteAnnotationError != nil {
 		return f.RemoveDeleteAnnotationError
@@ -150,12 +150,12 @@ func (f *fakeMachineProvider) RemoveDeleteAnnotation(_ context.Context, m *capiv
 		return fmt.Errorf("machine %s/%s not found", m.Namespace, m.Name)
 	}
 	annotations := stored.GetAnnotations()
-	delete(annotations, capiv1beta1.DeleteMachineAnnotation)
+	delete(annotations, capiv1beta2.DeleteMachineAnnotation)
 	stored.SetAnnotations(annotations)
 	return nil
 }
 
-func (f *fakeMachineProvider) Update(_ context.Context, m *capiv1beta1.Machine) error {
+func (f *fakeMachineProvider) Update(_ context.Context, m *capiv1beta2.Machine) error {
 	f.UpdateCallCount.Add(1)
 	if f.UpdateError != nil {
 		return f.UpdateError
@@ -169,7 +169,7 @@ func (f *fakeMachineProvider) Update(_ context.Context, m *capiv1beta1.Machine) 
 func (f *fakeMachineProvider) Reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.machines = make(map[string]*capiv1beta1.Machine)
+	f.machines = make(map[string]*capiv1beta2.Machine)
 	f.GetCallCount.Store(0)
 	f.ListCallCount.Store(0)
 	f.UpdateCallCount.Store(0)
@@ -185,7 +185,7 @@ func (f *fakeMachineProvider) Reset() {
 // fakeMDProvider implements machinedeployment.Provider for unit tests.
 type fakeMDProvider struct {
 	mu  sync.Mutex
-	mds map[string]*capiv1beta1.MachineDeployment // keyed by "namespace/name"
+	mds map[string]*capiv1beta2.MachineDeployment // keyed by "namespace/name"
 
 	GetCallCount    atomic.Int64
 	UpdateCallCount atomic.Int64
@@ -196,7 +196,7 @@ type fakeMDProvider struct {
 
 func newFakeMDProvider() *fakeMDProvider {
 	return &fakeMDProvider{
-		mds: make(map[string]*capiv1beta1.MachineDeployment),
+		mds: make(map[string]*capiv1beta2.MachineDeployment),
 	}
 }
 
@@ -204,13 +204,13 @@ func (f *fakeMDProvider) key(ns, name string) string {
 	return ns + "/" + name
 }
 
-func (f *fakeMDProvider) AddMD(md *capiv1beta1.MachineDeployment) {
+func (f *fakeMDProvider) AddMD(md *capiv1beta2.MachineDeployment) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.mds[f.key(md.Namespace, md.Name)] = md.DeepCopy()
 }
 
-func (f *fakeMDProvider) GetMD(name, ns string) *capiv1beta1.MachineDeployment {
+func (f *fakeMDProvider) GetMD(name, ns string) *capiv1beta2.MachineDeployment {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if md, ok := f.mds[f.key(ns, name)]; ok {
@@ -219,7 +219,7 @@ func (f *fakeMDProvider) GetMD(name, ns string) *capiv1beta1.MachineDeployment {
 	return nil
 }
 
-func (f *fakeMDProvider) Get(_ context.Context, name string, namespace string) (*capiv1beta1.MachineDeployment, error) {
+func (f *fakeMDProvider) Get(_ context.Context, name string, namespace string) (*capiv1beta2.MachineDeployment, error) {
 	f.GetCallCount.Add(1)
 	if f.GetError != nil {
 		return nil, f.GetError
@@ -233,11 +233,11 @@ func (f *fakeMDProvider) Get(_ context.Context, name string, namespace string) (
 	return md.DeepCopy(), nil
 }
 
-func (f *fakeMDProvider) List(_ context.Context, _ *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error) {
+func (f *fakeMDProvider) List(_ context.Context, _ *metav1.LabelSelector) ([]*capiv1beta2.MachineDeployment, error) {
 	return nil, fmt.Errorf("not implemented in fake")
 }
 
-func (f *fakeMDProvider) Update(_ context.Context, md *capiv1beta1.MachineDeployment) error {
+func (f *fakeMDProvider) Update(_ context.Context, md *capiv1beta2.MachineDeployment) error {
 	f.UpdateCallCount.Add(1)
 	if f.UpdateError != nil {
 		return f.UpdateError
@@ -251,7 +251,7 @@ func (f *fakeMDProvider) Update(_ context.Context, md *capiv1beta1.MachineDeploy
 func (f *fakeMDProvider) Reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.mds = make(map[string]*capiv1beta1.MachineDeployment)
+	f.mds = make(map[string]*capiv1beta2.MachineDeployment)
 	f.GetCallCount.Store(0)
 	f.UpdateCallCount.Store(0)
 	f.GetError = nil
@@ -270,27 +270,32 @@ func (l labelSet) Get(key string) string {
 	return l[key]
 }
 
+func (l labelSet) Lookup(key string) (string, bool) {
+	value, ok := l[key]
+	return value, ok
+}
+
 // newMachineDeployment creates a MachineDeployment with the given name, namespace, and replicas.
-func newMachineDeployment(name, namespace string, replicas int32) *capiv1beta1.MachineDeployment {
-	return &capiv1beta1.MachineDeployment{
+func newMachineDeployment(name, namespace string, replicas int32) *capiv1beta2.MachineDeployment {
+	return &capiv1beta2.MachineDeployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: capiv1beta1.MachineDeploymentSpec{
+		Spec: capiv1beta2.MachineDeploymentSpec{
 			Replicas: ptr.To(replicas),
 		},
 	}
 }
 
 // newMachineForMD creates a Machine belonging to the given MachineDeployment.
-func newMachineForMD(name, namespace, mdName string) *capiv1beta1.Machine {
-	return &capiv1beta1.Machine{
+func newMachineForMD(name, namespace, mdName string) *capiv1beta2.Machine {
+	return &capiv1beta2.Machine{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 			Labels: map[string]string{
-				capiv1beta1.MachineDeploymentNameLabel: mdName,
+				capiv1beta2.MachineDeploymentNameLabel: mdName,
 			},
 		},
 	}

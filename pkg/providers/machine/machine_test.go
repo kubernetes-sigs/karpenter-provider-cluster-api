@@ -25,7 +25,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	"k8s.io/utils/ptr"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
@@ -68,9 +69,9 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 	})
 
 	AfterEach(func() {
-		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta2.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
 		Eventually(func() client.ObjectList {
-			machineList := &capiv1beta1.MachineList{}
+			machineList := &capiv1beta2.MachineList{}
 			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
 			return machineList
 		}).Should(HaveField("Items", HaveLen(0)))
@@ -97,7 +98,7 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 		machine = newMachine("karpenter-2", testNamespace, "karpenter-cluster", true)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		providerID := *machine.Spec.ProviderID
+		providerID := machine.Spec.ProviderID
 		machine, err := provider.GetByProviderID(context.Background(), providerID)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machine).Should(HaveField("Name", "karpenter-2"))
@@ -109,7 +110,7 @@ var _ = Describe("Machine DefaultProvider.Get method", func() {
 		machine = newMachine("karpenter-2", testNamespace, "karpenter-cluster", false)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
-		providerID := *machine.Spec.ProviderID
+		providerID := machine.Spec.ProviderID
 		machine, err := provider.GetByProviderID(context.Background(), providerID)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(machine).Should(HaveField("Name", "karpenter-2"))
@@ -134,9 +135,9 @@ var _ = Describe("Machine DefaultProvider.List method", func() {
 
 	AfterEach(func() {
 		for _, ns := range []string{testNamespace, otherTestNamespace} {
-			Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(ns))).To(Succeed())
+			Expect(cl.DeleteAllOf(context.Background(), &capiv1beta2.Machine{}, client.InNamespace(ns))).To(Succeed())
 			Eventually(func() client.ObjectList {
-				machineList := &capiv1beta1.MachineList{}
+				machineList := &capiv1beta2.MachineList{}
 				Expect(cl.List(context.Background(), machineList, client.InNamespace(ns))).To(Succeed())
 				return machineList
 			}).Should(HaveField("Items", HaveLen(0)))
@@ -213,9 +214,9 @@ var _ = Describe("Machine DefaultProvider.AddDeleteAnnotation method", func() {
 	})
 
 	AfterEach(func() {
-		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta2.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
 		Eventually(func() client.ObjectList {
-			machineList := &capiv1beta1.MachineList{}
+			machineList := &capiv1beta2.MachineList{}
 			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
 			return machineList
 		}).Should(HaveField("Items", HaveLen(0)))
@@ -240,10 +241,10 @@ var _ = Describe("Machine DefaultProvider.AddDeleteAnnotation method", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() map[string]string {
-			m, err := provider.GetByProviderID(context.Background(), *machine.Spec.ProviderID)
+			m, err := provider.GetByProviderID(context.Background(), machine.Spec.ProviderID)
 			Expect(err).ToNot(HaveOccurred())
 			return m.GetAnnotations()
-		}).Should(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+		}).Should(HaveKey(capiv1beta2.DeleteMachineAnnotation))
 	})
 })
 
@@ -255,9 +256,9 @@ var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func()
 	})
 
 	AfterEach(func() {
-		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta2.Machine{}, client.InNamespace(testNamespace))).To(Succeed())
 		Eventually(func() client.ObjectList {
-			machineList := &capiv1beta1.MachineList{}
+			machineList := &capiv1beta2.MachineList{}
 			Expect(cl.List(context.Background(), machineList, client.InNamespace(testNamespace))).To(Succeed())
 			return machineList
 		}).Should(HaveField("Items", HaveLen(0)))
@@ -271,7 +272,7 @@ var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func()
 	It("returns an error when the Machine does not exist", func() {
 		machine := newMachine("non-existent", testNamespace, "fake-cluster", false)
 		annotations := map[string]string{
-			capiv1beta1.DeleteMachineAnnotation: time.Now().String(),
+			capiv1beta2.DeleteMachineAnnotation: time.Now().String(),
 		}
 		machine.SetAnnotations(annotations)
 		err := provider.RemoveDeleteAnnotation(context.Background(), machine)
@@ -281,7 +282,7 @@ var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func()
 	It("removes the deletion annotation", func() {
 		machine := newMachine("karpenter-1", testNamespace, "karpenter-cluster", true)
 		annotations := map[string]string{
-			capiv1beta1.DeleteMachineAnnotation: time.Now().String(),
+			capiv1beta2.DeleteMachineAnnotation: time.Now().String(),
 		}
 		machine.SetAnnotations(annotations)
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
@@ -290,15 +291,15 @@ var _ = Describe("Machine DefaultProvider.RemoveDeleteAnnotation method", func()
 		Expect(err).ToNot(HaveOccurred())
 
 		Eventually(func() map[string]string {
-			m, err := provider.GetByProviderID(context.Background(), *machine.Spec.ProviderID)
+			m, err := provider.GetByProviderID(context.Background(), machine.Spec.ProviderID)
 			Expect(err).ToNot(HaveOccurred())
 			return m.GetAnnotations()
-		}).ShouldNot(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+		}).ShouldNot(HaveKey(capiv1beta2.DeleteMachineAnnotation))
 	})
 })
 
-func newMachine(machineName string, machineNamespace string, clusterName string, karpenterMember bool) *capiv1beta1.Machine {
-	machine := &capiv1beta1.Machine{}
+func newMachine(machineName string, machineNamespace string, clusterName string, karpenterMember bool) *capiv1beta2.Machine {
+	machine := &capiv1beta2.Machine{}
 	machine.SetName(machineName)
 	machine.SetNamespace(machineNamespace)
 	if karpenterMember {
@@ -308,6 +309,10 @@ func newMachine(machineName string, machineNamespace string, clusterName string,
 	}
 	machine.Spec.ClusterName = clusterName
 	providerID := fmt.Sprintf("clusterapi://mock-%d\n", randsrc.Uint32())
-	machine.Spec.ProviderID = &providerID
+	machine.Spec.ProviderID = providerID
+	machine.Spec.Bootstrap = capiv1beta2.Bootstrap{DataSecretName: ptr.To("bootstrap-data")}
+	machine.Spec.InfrastructureRef = capiv1beta2.ContractVersionedObjectReference{
+		APIGroup: "infrastructure.cluster.x-k8s.io", Kind: "DockerMachine", Name: machineName,
+	}
 	return machine
 }

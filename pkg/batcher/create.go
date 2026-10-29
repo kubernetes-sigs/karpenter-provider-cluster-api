@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -48,8 +48,8 @@ func (c CreateInput) BatchKey() string {
 
 // CreateOutput is the result of a successfully bound Machine.
 type CreateOutput struct {
-	MachineDeployment *capiv1beta1.MachineDeployment
-	Machine           *capiv1beta1.Machine
+	MachineDeployment *capiv1beta2.MachineDeployment
+	Machine           *capiv1beta2.Machine
 }
 
 // CreateBatcher coalesces concurrent CloudProvider.Create calls targeting the
@@ -193,7 +193,7 @@ func pollForNUnclaimedMachines(
 	mdName, mdNS string,
 	count int,
 	timeout time.Duration,
-) []*capiv1beta1.Machine {
+) []*capiv1beta2.Machine {
 	selector := &metav1.LabelSelector{
 		MatchExpressions: []metav1.LabelSelectorRequirement{
 			{
@@ -201,7 +201,7 @@ func pollForNUnclaimedMachines(
 				Operator: metav1.LabelSelectorOpDoesNotExist,
 			},
 			{
-				Key:      capiv1beta1.MachineDeploymentNameLabel,
+				Key:      capiv1beta2.MachineDeploymentNameLabel,
 				Operator: metav1.LabelSelectorOpIn,
 				Values:   []string{mdName},
 			},
@@ -209,7 +209,7 @@ func pollForNUnclaimedMachines(
 	}
 
 	claimed := map[string]bool{}
-	var found []*capiv1beta1.Machine
+	var found []*capiv1beta2.Machine
 
 	deadline := time.After(timeout)
 	ticker := time.NewTicker(time.Second)
@@ -225,7 +225,7 @@ func pollForNUnclaimedMachines(
 				if m.DeletionTimestamp != nil {
 					continue
 				}
-				if _, marked := m.GetAnnotations()[capiv1beta1.DeleteMachineAnnotation]; marked {
+				if _, marked := m.GetAnnotations()[capiv1beta2.DeleteMachineAnnotation]; marked {
 					continue
 				}
 				claimed[m.Name] = true
@@ -264,7 +264,7 @@ func countUnclaimedMachines(
 				Operator: metav1.LabelSelectorOpDoesNotExist,
 			},
 			{
-				Key:      capiv1beta1.MachineDeploymentNameLabel,
+				Key:      capiv1beta2.MachineDeploymentNameLabel,
 				Operator: metav1.LabelSelectorOpIn,
 				Values:   []string{mdName},
 			},
@@ -281,7 +281,7 @@ func countUnclaimedMachines(
 		if m.DeletionTimestamp != nil {
 			continue
 		}
-		if _, marked := m.GetAnnotations()[capiv1beta1.DeleteMachineAnnotation]; marked {
+		if _, marked := m.GetAnnotations()[capiv1beta2.DeleteMachineAnnotation]; marked {
 			continue
 		}
 		count++
@@ -296,11 +296,11 @@ func bindMachineToNodeClaim(
 	ctx context.Context,
 	kubeClient client.Client,
 	machineProvider machine.Provider,
-	md *capiv1beta1.MachineDeployment,
-	m *capiv1beta1.Machine,
+	md *capiv1beta2.MachineDeployment,
+	m *capiv1beta2.Machine,
 	nodeClaimName string,
 ) Result[CreateOutput] {
-	var fresh *capiv1beta1.Machine
+	var fresh *capiv1beta2.Machine
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
 		fresh, err = machineProvider.Get(ctx, m.Name, m.Namespace)

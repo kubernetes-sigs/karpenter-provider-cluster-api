@@ -160,7 +160,7 @@ For example, if a MachineDeployment will have instances with 128G of RAM, 16 CPU
 maximim Pod density of 100 pods, and it will be used with the example NodePool shown earlier it
 should have the following annotations:
 ```yaml
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
   annotations:
@@ -172,7 +172,7 @@ metadata:
 
 Further, it should have the following label:
 ```yaml
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1beta2
 kind: MachineDeployment
 metadata:
   labels:
