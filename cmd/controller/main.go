@@ -49,5 +49,7 @@ func main() {
 			op.GetClient(),
 			op.EventRecorder,
 			cloudProvider,
+			op.MachineProvider,
+			op.MachineDeploymentProvider,
 		)...).Start(ctx)
 }

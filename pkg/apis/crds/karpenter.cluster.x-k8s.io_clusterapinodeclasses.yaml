@@ -97,6 +97,22 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-map-type: atomic
+              upgrades:
+                description: |-
+                  upgrades configures how nodes are replaced when the Machine behind a node
+                  no longer matches its MachineDeployment, for example after a Kubernetes
+                  version bump or a template change.
+                properties:
+                  managedBy:
+                    default: ClusterAPI
+                    description: |-
+                      managedBy is the controller that replaces nodes whose Machine no longer
+                      matches its MachineDeployment: ClusterAPI (the default) or Karpenter.
+                    enum:
+                    - ClusterAPI
+                    - Karpenter
+                    type: string
+                type: object
             type: object
           status:
             description: ClusterAPINodeClassStatus is the status for ClusterAPINodeClasses

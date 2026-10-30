@@ -19,6 +19,7 @@ package machinedeployment
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -30,6 +31,9 @@ type Provider interface {
 	Get(context.Context, string, string) (*capiv1beta1.MachineDeployment, error)
 	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error)
 	Update(context.Context, *capiv1beta1.MachineDeployment) error
+	// CurrentMachineSetName returns the name of the MachineSet that matches the
+	// MachineDeployment's current template, or an empty string if there is none.
+	CurrentMachineSetName(context.Context, *capiv1beta1.MachineDeployment) (string, error)
 }
 
 type DefaultProvider struct {
@@ -88,4 +92,37 @@ func (p *DefaultProvider) Update(ctx context.Context, machineDeployment *capiv1b
 	}
 
 	return nil
+}
+
+// CurrentMachineSetName returns the MachineDeployment's MachineSet with the highest
+// revision. Cluster API gives the MachineSet for the current template the next
+// revision whenever the template changes, including when it reuses an older
+// MachineSet on a rollback, so that MachineSet is the current one.
+func (p *DefaultProvider) CurrentMachineSetName(ctx context.Context, machineDeployment *capiv1beta1.MachineDeployment) (string, error) {
+	machineSetList := &capiv1beta1.MachineSetList{}
+	err := p.kubeClient.List(ctx, machineSetList,
+		client.InNamespace(machineDeployment.Namespace),
+		client.MatchingLabels{capiv1beta1.MachineDeploymentNameLabel: machineDeployment.Name},
+	)
+	if err != nil {
+		return "", fmt.Errorf("unable to list MachineSets for MachineDeployment %q: %w", machineDeployment.Name, err)
+	}
+
+	current := ""
+	currentRevision := int64(-1)
+	for _, ms := range machineSetList.Items {
+		if !metav1.IsControlledBy(&ms, machineDeployment) {
+			continue
+		}
+		revision, err := strconv.ParseInt(ms.Annotations[capiv1beta1.RevisionAnnotation], 10, 64)
+		if err != nil {
+			// Cluster API annotates a MachineSet as it creates it, so skip one we cannot place.
+			continue
+		}
+		if revision > currentRevision {
+			current, currentRevision = ms.Name, revision
+		}
+	}
+
+	return current, nil
 }

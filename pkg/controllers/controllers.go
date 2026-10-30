@@ -24,7 +24,10 @@ import (
 	"k8s.io/utils/clock"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	machineadoption "sigs.k8s.io/karpenter-provider-cluster-api/pkg/controllers/machine/adoption"
 	statuscontroller "sigs.k8s.io/karpenter-provider-cluster-api/pkg/controllers/nodeclass/status"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machine"
+	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers/machinedeployment"
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter/pkg/events"
 )
@@ -36,9 +39,12 @@ func NewControllers(
 	kubeClient client.Client,
 	recorder events.Recorder,
 	cloudProvider cloudprovider.CloudProvider,
+	machineProvider machine.Provider,
+	machineDeploymentProvider machinedeployment.Provider,
 ) []controller.Controller {
 	controllers := []controller.Controller{
 		statuscontroller.NewController(kubeClient),
+		machineadoption.NewController(clock, kubeClient, machineProvider, machineDeploymentProvider),
 	}
 	return controllers
 }

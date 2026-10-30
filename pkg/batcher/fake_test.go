@@ -32,15 +32,15 @@ type fakeMachineProvider struct {
 	mu       sync.Mutex
 	machines map[string]*capiv1beta1.Machine // keyed by "namespace/name"
 
-	GetCallCount              atomic.Int64
-	ListCallCount             atomic.Int64
-	UpdateCallCount           atomic.Int64
-	AddDeleteAnnotationCount  atomic.Int64
+	GetCallCount                atomic.Int64
+	ListCallCount               atomic.Int64
+	UpdateCallCount             atomic.Int64
+	AddDeleteAnnotationCount    atomic.Int64
 	RemoveDeleteAnnotationCount atomic.Int64
 
-	GetError              error
-	ListError             error
-	UpdateError           error
+	GetError                    error
+	ListError                   error
+	UpdateError                 error
 	AddDeleteAnnotationError    error
 	RemoveDeleteAnnotationError error
 }
@@ -235,6 +235,10 @@ func (f *fakeMDProvider) Get(_ context.Context, name string, namespace string) (
 
 func (f *fakeMDProvider) List(_ context.Context, _ *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error) {
 	return nil, fmt.Errorf("not implemented in fake")
+}
+
+func (f *fakeMDProvider) CurrentMachineSetName(_ context.Context, _ *capiv1beta1.MachineDeployment) (string, error) {
+	return "", fmt.Errorf("not implemented in fake")
 }
 
 func (f *fakeMDProvider) Update(_ context.Context, md *capiv1beta1.MachineDeployment) error {

@@ -141,6 +141,47 @@ metadata:
 spec: {}
 ```
 
+### Upgrading nodes
+
+Both Karpenter and Cluster API can replace a node whose Machine no longer matches its
+MachineDeployment, for example after a Kubernetes version bump or a template change.
+`spec.upgrades.managedBy` on the ClusterAPINodeClass chooses which one does.
+
+**`ClusterAPI`** (the default) leaves upgrades to Cluster API. Karpenter does not report
+drift for MachineDeployment changes, and when a rollout replaces Karpenter's Machines the
+provider adopts the replacement Machines, creating a NodeClaim for each, so Karpenter keeps
+managing the pool. To also stop Karpenter replacing nodes for its own drift reasons, add a
+disruption budget to the NodePool:
+```yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+spec:
+  disruption:
+    budgets:
+      - nodes: "0"
+        reasons: ["Drifted"]
+```
+
+**`Karpenter`** makes Karpenter replace nodes. A NodeClaim whose Machine belongs to a
+MachineSet other than its MachineDeployment's current one is reported as drifted, and
+Karpenter replaces it within the NodePool's disruption budgets. Set the MachineDeployment's
+rollout strategy to `OnDelete`, so Cluster API does not replace the same Machines itself:
+```yaml
+apiVersion: karpenter.cluster.x-k8s.io/v1alpha1
+kind: ClusterAPINodeClass
+metadata:
+  name: default
+spec:
+  upgrades:
+    managedBy: Karpenter
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+spec:
+  strategy:
+    type: OnDelete
+```
+
 ### Configuring the Cluster API resources
 
 The Karpenter Cluster API provider is designed to inspect Cluster API MachineDeployment
