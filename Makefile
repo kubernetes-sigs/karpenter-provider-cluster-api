@@ -135,6 +135,8 @@ apply: build-with-ko ## Deploy the Karpenter CAPI controller from the current st
 	kubectl apply -f pkg/apis/crds/
 	sed 's|REPLACE_IMAGE|$(IMG_REPOSITORY):$(IMG_TAG)|g' test/resources/karpenter-install.yaml | kubectl apply -f -
 
+JUNIT_REPORT := $(if $(ARTIFACTS),--ginkgo.junit-report="$(abspath $(ARTIFACTS))/junit_upstream_e2e.xml")
+
 .PHONY: upstream-e2etests
 upstream-e2etests: FOCUS ?= Performance # TODO(maxcao13): support more regression tests
 upstream-e2etests:
@@ -143,6 +145,7 @@ upstream-e2etests:
 		-timeout 3.25h \
 		-v \
 		./test/suites/regression \
+		$(JUNIT_REPORT) \
 		--ginkgo.focus="$(FOCUS)" \
 		--ginkgo.timeout=3h \
 		--ginkgo.grace-period=5m \
