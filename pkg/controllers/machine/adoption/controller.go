@@ -22,17 +22,21 @@ import (
 	"sort"
 	"time"
 
-	"github.com/awslabs/operatorpkg/singleton"
 	"github.com/samber/lo"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/clock"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	controllerruntime "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	karpv1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 	"sigs.k8s.io/karpenter/pkg/controllers/provisioning/scheduling"
@@ -50,12 +54,15 @@ const (
 	// not create, such as a replacement Machine from a Cluster API rollout.
 	AdoptedAnnotation = v1alpha1.Group + "/adopted"
 
-	// GracePeriod is how long a Machine must exist before it can be adopted. It is
-	// longer than the create batcher waits for new Machines, so Machines that
-	// Karpenter is about to claim for its own NodeClaims are left alone.
+	// GracePeriod is how long a Machine must exist before it can be adopted
+	// outside a rollout. It is longer than the create batcher waits for new
+	// Machines, so Machines that Karpenter is about to claim for its own
+	// NodeClaims are left alone.
 	GracePeriod = 2 * time.Minute
 
-	pollPeriod = 30 * time.Second
+	// resyncPeriod is how often a MachineDeployment is reconciled without a
+	// Machine event, to pick up NodePool and NodeClass changes.
+	resyncPeriod = 5 * time.Minute
 )
 
 // Controller adopts the Machines that Cluster API creates in Karpenter's
@@ -65,18 +72,23 @@ const (
 // Nodes or scales them down. The controller creates a NodeClaim for each one,
 // bound to the Machine through the Machine annotation, so Karpenter manages it
 // like any other node.
+//
+// It reconciles a MachineDeployment whenever one of its Machines changes, so a
+// replacement Machine is adopted as soon as it is running.
 type Controller struct {
 	kubeClient                client.Client
 	machineProvider           machine.Provider
 	machineDeploymentProvider machinedeployment.Provider
+	managementCache           cache.Cache
 	clock                     clock.Clock
 }
 
-func NewController(clk clock.Clock, kubeClient client.Client, machineProvider machine.Provider, machineDeploymentProvider machinedeployment.Provider) *Controller {
+func NewController(clk clock.Clock, kubeClient client.Client, machineProvider machine.Provider, machineDeploymentProvider machinedeployment.Provider, managementCache cache.Cache) *Controller {
 	return &Controller{
 		kubeClient:                kubeClient,
 		machineProvider:           machineProvider,
 		machineDeploymentProvider: machineDeploymentProvider,
+		managementCache:           managementCache,
 		clock:                     clk,
 	}
 }
@@ -85,8 +97,25 @@ func (c *Controller) Name() string {
 	return "machine.adoption"
 }
 
-func (c *Controller) Reconcile(ctx context.Context) (reconcile.Result, error) {
+// Reconcile adopts the Machines of the MachineDeployment named by the request.
+func (c *Controller) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
 	ctx = injection.WithControllerName(ctx, c.Name())
+
+	md, err := c.machineDeploymentProvider.Get(ctx, req.Name, req.Namespace)
+	if err != nil {
+		return reconcile.Result{}, client.IgnoreNotFound(err)
+	}
+	if _, member := md.GetLabels()[providers.NodePoolMemberLabel]; !member {
+		return reconcile.Result{}, nil
+	}
+
+	nodePool, instanceType, err := c.nodePoolForMachineDeployment(ctx, md)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+	if nodePool == nil {
+		return reconcile.Result{RequeueAfter: resyncPeriod}, nil
+	}
 
 	nodeClaimList := &karpv1.NodeClaimList{}
 	if err := c.kubeClient.List(ctx, nodeClaimList); err != nil {
@@ -100,86 +129,97 @@ func (c *Controller) Reconcile(ctx context.Context) (reconcile.Result, error) {
 		}
 	}
 
-	nodePoolList := &karpv1.NodePoolList{}
-	if err := c.kubeClient.List(ctx, nodePoolList); err != nil {
-		return reconcile.Result{}, fmt.Errorf("unable to list NodePools: %w", err)
-	}
-	// visit NodePools in order, so a Machine that suits several is always adopted by the same one
-	sort.Slice(nodePoolList.Items, func(i, j int) bool {
-		return nodePoolList.Items[i].Name < nodePoolList.Items[j].Name
+	machines, err := c.machineProvider.List(ctx, md.Namespace, &metav1.LabelSelector{
+		MatchLabels: map[string]string{capiv1beta1.MachineDeploymentNameLabel: md.Name},
 	})
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("unable to list Machines for MachineDeployment %q: %w", md.Name, err)
+	}
 
+	// While Cluster API replaces Machines they span more than one MachineSet, and
+	// the Machines it creates are adopted without waiting out the grace period.
+	machineSets := map[string]bool{}
+	for _, m := range machines {
+		machineSets[m.GetLabels()[capiv1beta1.MachineSetNameLabel]] = true
+	}
+	rollingOut := len(machineSets) > 1
+
+	requeueAfter := resyncPeriod
 	var errs []error
-	for i := range nodePoolList.Items {
-		if err := c.adoptForNodePool(ctx, &nodePoolList.Items[i], claimed); err != nil {
+	for _, m := range machines {
+		if claimed[fmt.Sprintf("%s/%s", m.Namespace, m.Name)] || !c.adoptable(m) {
+			continue
+		}
+		if wait := GracePeriod - c.clock.Since(m.CreationTimestamp.Time); !rollingOut && wait > 0 {
+			requeueAfter = min(requeueAfter, wait)
+			continue
+		}
+		if err := c.adopt(ctx, nodePool, instanceType, m); err != nil {
 			errs = append(errs, err)
 		}
 	}
 	if len(errs) > 0 {
-		return reconcile.Result{}, fmt.Errorf("unable to adopt Machines: %v", errs)
+		return reconcile.Result{}, fmt.Errorf("unable to adopt Machines of MachineDeployment %q: %v", md.Name, errs)
 	}
 
-	return reconcile.Result{RequeueAfter: pollPeriod}, nil
+	return reconcile.Result{RequeueAfter: requeueAfter}, nil
 }
 
-func (c *Controller) adoptForNodePool(ctx context.Context, nodePool *karpv1.NodePool, claimed map[string]bool) error {
-	if !nodePool.DeletionTimestamp.IsZero() {
-		return nil
+// nodePoolForMachineDeployment returns the NodePool that adopts the
+// MachineDeployment's Machines, and the instance type it offers for them: the
+// first NodePool by name whose NodeClass leaves upgrades to Cluster API, selects
+// the MachineDeployment, and could place a NodeClaim on it.
+func (c *Controller) nodePoolForMachineDeployment(ctx context.Context, md *capiv1beta1.MachineDeployment) (*karpv1.NodePool, *cloudprovider.InstanceType, error) {
+	nodePoolList := &karpv1.NodePoolList{}
+	if err := c.kubeClient.List(ctx, nodePoolList); err != nil {
+		return nil, nil, fmt.Errorf("unable to list NodePools: %w", err)
 	}
-	nodeClassRef := nodePool.Spec.Template.Spec.NodeClassRef
-	if nodeClassRef == nil || nodeClassRef.Group != v1alpha1.Group || nodeClassRef.Kind != "ClusterAPINodeClass" {
-		return nil
-	}
-	nodeClass := &v1alpha1.ClusterAPINodeClass{}
-	if err := c.kubeClient.Get(ctx, client.ObjectKey{Name: nodeClassRef.Name}, nodeClass); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-	if nodeClass.UpgradeManager() != v1alpha1.UpgradeManagerClusterAPI {
-		return nil
-	}
+	sort.Slice(nodePoolList.Items, func(i, j int) bool {
+		return nodePoolList.Items[i].Name < nodePoolList.Items[j].Name
+	})
 
-	machineDeployments, err := c.machineDeploymentProvider.List(ctx, nodeClass.Spec.ScalableResourceSelector)
-	if err != nil {
-		return fmt.Errorf("unable to list MachineDeployments for NodePool %q: %w", nodePool.Name, err)
-	}
-
-	var errs []error
-	for _, md := range machineDeployments {
-		machines, err := c.machineProvider.List(ctx, md.Namespace, &metav1.LabelSelector{
-			MatchLabels: map[string]string{capiv1beta1.MachineDeploymentNameLabel: md.Name},
-		})
-		if err != nil {
-			errs = append(errs, fmt.Errorf("unable to list Machines for MachineDeployment %q: %w", md.Name, err))
+	instanceType := clusterapi.InstanceTypeForMachineDeployment(md)
+	for i := range nodePoolList.Items {
+		nodePool := &nodePoolList.Items[i]
+		if !nodePool.DeletionTimestamp.IsZero() {
 			continue
 		}
-
-		nodeClaimTemplate := scheduling.NewNodeClaimTemplate(nodePool)
-		instanceType := clusterapi.InstanceTypeForMachineDeployment(md)
+		nodeClassRef := nodePool.Spec.Template.Spec.NodeClassRef
+		if nodeClassRef == nil || nodeClassRef.Group != v1alpha1.Group || nodeClassRef.Kind != "ClusterAPINodeClass" {
+			continue
+		}
+		nodeClass := &v1alpha1.ClusterAPINodeClass{}
+		if err := c.kubeClient.Get(ctx, client.ObjectKey{Name: nodeClassRef.Name}, nodeClass); err != nil {
+			if client.IgnoreNotFound(err) != nil {
+				return nil, nil, fmt.Errorf("unable to get NodeClass %q: %w", nodeClassRef.Name, err)
+			}
+			continue
+		}
+		if nodeClass.UpgradeManager() != v1alpha1.UpgradeManagerClusterAPI {
+			continue
+		}
+		selector := labels.Everything()
+		if nodeClass.Spec.ScalableResourceSelector != nil {
+			s, err := metav1.LabelSelectorAsSelector(nodeClass.Spec.ScalableResourceSelector)
+			if err != nil {
+				return nil, nil, fmt.Errorf("unable to convert selector of NodeClass %q: %w", nodeClass.Name, err)
+			}
+			selector = s
+		}
+		if !selector.Matches(labels.Set(md.GetLabels())) {
+			continue
+		}
 		// the same check the scheduler makes before it places a NodeClaim on an instance type
-		if instanceType.Requirements.Intersects(nodeClaimTemplate.Requirements) != nil {
+		if instanceType.Requirements.Intersects(scheduling.NewNodeClaimTemplate(nodePool).Requirements) != nil {
 			continue
 		}
-
-		for _, m := range machines {
-			machineRef := fmt.Sprintf("%s/%s", m.Namespace, m.Name)
-			if claimed[machineRef] || !c.adoptable(m) {
-				continue
-			}
-			if err := c.adopt(ctx, nodePool, instanceType, m); err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			claimed[machineRef] = true
-		}
+		return nodePool, instanceType, nil
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("NodePool %q: %v", nodePool.Name, errs)
-	}
-	return nil
+	return nil, nil, nil
 }
 
 // adoptable reports whether a Machine is running a Node that Karpenter has not
-// claimed and is not about to claim.
+// claimed.
 func (c *Controller) adoptable(m *capiv1beta1.Machine) bool {
 	if c.machineProvider.IsDeleting(m) || m.Spec.ProviderID == nil {
 		return false
@@ -190,10 +230,8 @@ func (c *Controller) adoptable(m *capiv1beta1.Machine) bool {
 	if _, member := m.GetLabels()[providers.NodePoolMemberLabel]; member {
 		return false
 	}
-	if _, marked := m.GetAnnotations()[capiv1beta1.DeleteMachineAnnotation]; marked {
-		return false
-	}
-	return c.clock.Since(m.CreationTimestamp.Time) >= GracePeriod
+	_, marked := m.GetAnnotations()[capiv1beta1.DeleteMachineAnnotation]
+	return !marked
 }
 
 // adopt claims a Machine with the NodePool member label, so the create batcher
@@ -245,6 +283,16 @@ func nodeClaimForMachine(nodePool *karpv1.NodePool, instanceType *cloudprovider.
 func (c *Controller) Register(_ context.Context, m manager.Manager) error {
 	return controllerruntime.NewControllerManagedBy(m).
 		Named(c.Name()).
-		WatchesRawSource(singleton.Source()).
-		Complete(singleton.AsReconciler(c))
+		WatchesRawSource(source.Kind(c.managementCache, &capiv1beta1.Machine{},
+			handler.TypedEnqueueRequestsFromMapFunc(machineDeploymentForMachine))).
+		Complete(c)
+}
+
+// machineDeploymentForMachine maps a Machine event to its MachineDeployment.
+func machineDeploymentForMachine(_ context.Context, m *capiv1beta1.Machine) []reconcile.Request {
+	name, found := m.GetLabels()[capiv1beta1.MachineDeploymentNameLabel]
+	if !found {
+		return nil
+	}
+	return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: m.Namespace, Name: name}}}
 }

@@ -28,6 +28,7 @@ import (
 	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	karpv1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 	karptest "sigs.k8s.io/karpenter/pkg/test"
 	. "sigs.k8s.io/karpenter/pkg/test/expectations"
@@ -83,7 +84,7 @@ var _ = Describe("Machine Adoption Controller", func() {
 	It("adopts a running Machine that no NodeClaim is bound to", func() {
 		m := createRunningMachine("m-1", machineDeployment)
 
-		ExpectSingletonReconciled(ctx, controller)
+		reconcileMachineDeployment(machineDeployment)
 
 		nodeClaim := &karpv1.NodeClaim{}
 		Expect(cl.Get(ctx, client.ObjectKey{Name: "pool-m-1"}, nodeClaim)).To(Succeed())
@@ -107,8 +108,8 @@ var _ = Describe("Machine Adoption Controller", func() {
 	It("adopts a Machine only once", func() {
 		createRunningMachine("m-1", machineDeployment)
 
-		ExpectSingletonReconciled(ctx, controller)
-		ExpectSingletonReconciled(ctx, controller)
+		reconcileMachineDeployment(machineDeployment)
+		reconcileMachineDeployment(machineDeployment)
 
 		nodeClaimList := &karpv1.NodeClaimList{}
 		Expect(cl.List(ctx, nodeClaimList)).To(Succeed())
@@ -120,7 +121,52 @@ var _ = Describe("Machine Adoption Controller", func() {
 		ExpectApplied(ctx, cl, nodeClass)
 		createRunningMachine("m-1", machineDeployment)
 
-		ExpectSingletonReconciled(ctx, controller)
+		reconcileMachineDeployment(machineDeployment)
+
+		expectNoNodeClaims()
+	})
+
+	It("adopts a young Machine while Cluster API replaces Machines", func() {
+		fakeClock.SetTime(time.Now())
+		old := newMachine("m-old", machineDeployment)
+		old.Labels[capiv1beta1.MachineSetNameLabel] = machineDeployment.Name + "-old"
+		old.Labels[providers.NodePoolMemberLabel] = ""
+		ExpectApplied(ctx, cl, old)
+		createRunningMachine("m-1", machineDeployment)
+
+		reconcileMachineDeployment(machineDeployment)
+
+		nodeClaim := &karpv1.NodeClaim{}
+		Expect(cl.Get(ctx, client.ObjectKey{Name: "pool-m-1"}, nodeClaim)).To(Succeed())
+	})
+
+	It("requeues a young Machine for when its grace period ends", func() {
+		fakeClock.SetTime(time.Now())
+		createRunningMachine("m-1", machineDeployment)
+
+		result := reconcileMachineDeployment(machineDeployment)
+
+		expectNoNodeClaims()
+		Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		Expect(result.RequeueAfter).To(BeNumerically("<=", adoption.GracePeriod))
+	})
+
+	It("leaves MachineDeployments without the member label alone", func() {
+		delete(machineDeployment.Labels, providers.NodePoolMemberLabel)
+		ExpectApplied(ctx, cl, machineDeployment)
+		createRunningMachine("m-1", machineDeployment)
+
+		reconcileMachineDeployment(machineDeployment)
+
+		expectNoNodeClaims()
+	})
+
+	It("leaves MachineDeployments the NodeClass does not select alone", func() {
+		nodeClass.Spec.ScalableResourceSelector = &metav1.LabelSelector{MatchLabels: map[string]string{"pool": "other"}}
+		ExpectApplied(ctx, cl, nodeClass)
+		createRunningMachine("m-1", machineDeployment)
+
+		reconcileMachineDeployment(machineDeployment)
 
 		expectNoNodeClaims()
 	})
@@ -129,7 +175,7 @@ var _ = Describe("Machine Adoption Controller", func() {
 		fakeClock.SetTime(time.Now())
 		createRunningMachine("m-1", machineDeployment)
 
-		ExpectSingletonReconciled(ctx, controller)
+		reconcileMachineDeployment(machineDeployment)
 
 		expectNoNodeClaims()
 	})
@@ -138,7 +184,7 @@ var _ = Describe("Machine Adoption Controller", func() {
 		m := newMachine("m-1", machineDeployment)
 		ExpectApplied(ctx, cl, m)
 
-		ExpectSingletonReconciled(ctx, controller)
+		reconcileMachineDeployment(machineDeployment)
 
 		expectNoNodeClaims()
 	})
@@ -149,7 +195,7 @@ var _ = Describe("Machine Adoption Controller", func() {
 		ExpectApplied(ctx, cl, m)
 		setRunning(m)
 
-		ExpectSingletonReconciled(ctx, controller)
+		reconcileMachineDeployment(machineDeployment)
 
 		expectNoNodeClaims()
 	})
@@ -165,7 +211,7 @@ var _ = Describe("Machine Adoption Controller", func() {
 		})
 		ExpectApplied(ctx, cl, nodeClaim)
 
-		ExpectSingletonReconciled(ctx, controller)
+		reconcileMachineDeployment(machineDeployment)
 
 		nodeClaimList := &karpv1.NodeClaimList{}
 		Expect(cl.List(ctx, nodeClaimList)).To(Succeed())
@@ -183,11 +229,18 @@ var _ = Describe("Machine Adoption Controller", func() {
 		ExpectApplied(ctx, cl, nodePool)
 		createRunningMachine("m-1", machineDeployment)
 
-		ExpectSingletonReconciled(ctx, controller)
+		reconcileMachineDeployment(machineDeployment)
 
 		expectNoNodeClaims()
 	})
 })
+
+func reconcileMachineDeployment(md *capiv1beta1.MachineDeployment) reconcile.Result {
+	GinkgoHelper()
+	result, err := controller.Reconcile(ctx, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(md)})
+	Expect(err).ToNot(HaveOccurred())
+	return result
+}
 
 func expectNoNodeClaims() {
 	GinkgoHelper()
@@ -216,7 +269,10 @@ func newMachine(name string, md *capiv1beta1.MachineDeployment) *capiv1beta1.Mac
 	m := &capiv1beta1.Machine{}
 	m.Name = name
 	m.Namespace = testNamespace
-	m.Labels = map[string]string{capiv1beta1.MachineDeploymentNameLabel: md.Name}
+	m.Labels = map[string]string{
+		capiv1beta1.MachineDeploymentNameLabel: md.Name,
+		capiv1beta1.MachineSetNameLabel:        md.Name + "-new",
+	}
 	m.Spec.ClusterName = md.Spec.ClusterName
 	m.Spec.ProviderID = ptr.To(fmt.Sprintf("clusterapi://%s", name))
 	return m

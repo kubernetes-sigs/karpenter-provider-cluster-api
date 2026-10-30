@@ -51,5 +51,6 @@ func main() {
 			cloudProvider,
 			op.MachineProvider,
 			op.MachineDeploymentProvider,
+			op.ManagementCluster.GetCache(),
 		)...).Start(ctx)
 }

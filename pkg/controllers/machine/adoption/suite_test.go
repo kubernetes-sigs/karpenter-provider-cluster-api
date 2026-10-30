@@ -94,7 +94,8 @@ var _ = BeforeSuite(func() {
 	fakeClock = clocktesting.NewFakeClock(time.Now())
 	controller = adoption.NewController(fakeClock, cl,
 		machine.NewDefaultProvider(ctx, cl),
-		machinedeployment.NewDefaultProvider(ctx, cl))
+		machinedeployment.NewDefaultProvider(ctx, cl),
+		nil) // the tests call Reconcile directly, so no watch needs the cache
 })
 
 var _ = AfterSuite(func() {

@@ -312,6 +312,10 @@ func bindMachineToNodeClaim(
 		if labels == nil {
 			labels = map[string]string{}
 		}
+		// another NodeClaim, or the machine adoption controller, claimed it since the poll
+		if _, claimed := labels[providers.NodePoolMemberLabel]; claimed {
+			return Result[CreateOutput]{Err: fmt.Errorf("machine %q was claimed by another NodeClaim", fresh.Name)}
+		}
 		labels[providers.NodePoolMemberLabel] = ""
 		fresh.SetLabels(labels)
 		err = machineProvider.Update(ctx, fresh)

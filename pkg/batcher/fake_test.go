@@ -43,6 +43,10 @@ type fakeMachineProvider struct {
 	UpdateError                 error
 	AddDeleteAnnotationError    error
 	RemoveDeleteAnnotationError error
+
+	// BeforeGet, when set, is called with each Machine before Get returns it,
+	// to change it as another controller would between List and Get.
+	BeforeGet func(*capiv1beta1.Machine)
 }
 
 func newFakeMachineProvider() *fakeMachineProvider {
@@ -80,6 +84,9 @@ func (f *fakeMachineProvider) Get(_ context.Context, name string, namespace stri
 	m, ok := f.machines[f.key(namespace, name)]
 	if !ok {
 		return nil, fmt.Errorf("machine %s/%s not found", namespace, name)
+	}
+	if f.BeforeGet != nil {
+		f.BeforeGet(m)
 	}
 	return m.DeepCopy(), nil
 }
@@ -180,6 +187,7 @@ func (f *fakeMachineProvider) Reset() {
 	f.UpdateError = nil
 	f.AddDeleteAnnotationError = nil
 	f.RemoveDeleteAnnotationError = nil
+	f.BeforeGet = nil
 }
 
 // fakeMDProvider implements machinedeployment.Provider for unit tests.

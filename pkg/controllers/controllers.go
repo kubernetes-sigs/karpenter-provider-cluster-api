@@ -22,6 +22,7 @@ import (
 	"github.com/awslabs/operatorpkg/controller"
 
 	"k8s.io/utils/clock"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	machineadoption "sigs.k8s.io/karpenter-provider-cluster-api/pkg/controllers/machine/adoption"
@@ -41,10 +42,11 @@ func NewControllers(
 	cloudProvider cloudprovider.CloudProvider,
 	machineProvider machine.Provider,
 	machineDeploymentProvider machinedeployment.Provider,
+	managementCache cache.Cache,
 ) []controller.Controller {
 	controllers := []controller.Controller{
 		statuscontroller.NewController(kubeClient),
-		machineadoption.NewController(clock, kubeClient, machineProvider, machineDeploymentProvider),
+		machineadoption.NewController(clock, kubeClient, machineProvider, machineDeploymentProvider, managementCache),
 	}
 	return controllers
 }

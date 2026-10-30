@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	karpv1 "sigs.k8s.io/karpenter/pkg/apis/v1"
@@ -116,6 +117,28 @@ var _ = Describe("Create Batching", func() {
 		md := fakeMDP.GetMD("md-0", "default")
 		Expect(md).NotTo(BeNil())
 		Expect(*md.Spec.Replicas).To(BeNumerically("==", 5))
+	})
+
+	It("should not claim a machine that was claimed after it was listed", func() {
+		fakeMDP.AddMD(newMachineDeployment("md-0", "default", 1))
+		fakeMP.AddMachine(newMachineForMD("machine-0", "default", "md-0"))
+		// another claimant, such as the machine adoption controller, labels the
+		// Machine between the batcher's poll and its bind
+		fakeMP.BeforeGet = func(m *capiv1beta1.Machine) {
+			m.Labels[providers.NodePoolMemberLabel] = ""
+		}
+
+		cb, kubeClient := newCreateBatcher("nc-0")
+		result := cb.Add(ctx, &batcher.CreateInput{
+			NodeClaimName:         "nc-0",
+			MachineDeploymentName: "md-0",
+			MachineDeploymentNS:   "default",
+		})
+
+		Expect(result.Err).To(MatchError(ContainSubstring("was claimed by another NodeClaim")))
+		nc := &karpv1.NodeClaim{}
+		Expect(kubeClient.Get(ctx, client.ObjectKey{Name: "nc-0"}, nc)).To(Succeed())
+		Expect(nc.Annotations).NotTo(HaveKey(providers.MachineAnnotation))
 	})
 
 	It("should batch different MachineDeployments into separate calls", func() {
