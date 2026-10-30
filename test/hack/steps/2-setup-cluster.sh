@@ -2,10 +2,12 @@
 
 set -euo pipefail
 
-CAPK_VERSION=v0.10.1
-CAPI_VERSION=release-1.10
-CALICO_VERSION=v3.31.5
-DEFAULT_KIND_IMAGE=kindest/node:v1.32.8
+: "${CAPK_VERSION:?Set CAPK_VERSION or run ci-e2e.sh}"
+: "${CAPI_VERSION:?Set CAPI_VERSION or run ci-e2e.sh}"
+: "${CALICO_VERSION:?Set CALICO_VERSION or run ci-e2e.sh}"
+: "${KIND_CLUSTER_IMAGE:?Set KIND_CLUSTER_IMAGE or run ci-e2e.sh}"
+
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 
 WORKSPACE="${WORKSPACE:-$(pwd)}"
 mkdir -p "$WORKSPACE"
@@ -21,7 +23,6 @@ if [[ ! -d cluster-api ]]; then
   git clone https://github.com/kubernetes-sigs/cluster-api.git -b "$CAPI_VERSION" --single-branch
 fi
 
-export KIND_CLUSTER_IMAGE="${KIND_CLUSTER_IMAGE:-$DEFAULT_KIND_IMAGE}"
 export CAPI_PATH="$WORKSPACE/cluster-api"
 
 # don't run the entire suite with make -C cluster-api-provider-kubemark/hack/tests test-e2e
@@ -47,10 +48,10 @@ make -C "$CAPK_HACK/tests" .tenant-cluster-info
 TENANT_KUBECTL="kubectl --kubeconfig /tmp/km.kubeconfig"
 
 # apply capi workload resources
-kubectl apply -f "$WORKSPACE"/test/resources/kubemark-machine-deployment.yaml
+kubectl apply -f "$REPO_ROOT"/test/resources/kubemark-machine-deployment.yaml
 
 # apply calico for CNI
-$TENANT_KUBECTL apply -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/calico.yaml
+$TENANT_KUBECTL apply -f "https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/calico.yaml"
 
 # we have to manually edit the management kubeconfig for karpenter to use from within the tenant cluster
 # use Kind control-plane container's IP as server
@@ -62,34 +63,3 @@ sed -i '/certificate-authority-data:/d' /tmp/mgmt.kubeconfig
 sed -i '/server: https:\/\//a\    insecure-skip-tls-verify: true' /tmp/mgmt.kubeconfig
 $TENANT_KUBECTL create configmap mgmt-kubeconfig \
   --from-file=kubeconfig=/tmp/mgmt.kubeconfig -n kube-system
-
-# apply karpenter deployment manifests and CRDs
-# deployment should have the mounted configmap
-KIND_CLUSTER_NAME=km-cp KWOK_REPO=kind.local KUBECONFIG=/tmp/km.kubeconfig make apply
-
-$TENANT_KUBECTL wait -n kube-system deployment karpenter --for condition=Available --timeout=2m
-
-# TODO(maxcao13): below is a temporary validation test that karpenter works, we should remove this when we have real tests
-
-# apply karpenter workload manifests
-$TENANT_KUBECTL apply -f "$WORKSPACE"/test/resources/default_clusterapinodeclass.yaml
-$TENANT_KUBECTL apply -f "$WORKSPACE"/test/resources/default_nodepool.yaml
-$TENANT_KUBECTL apply -f "$WORKSPACE"/test/resources/sample_deployment.yaml
-
-# scale up the deployment
-$TENANT_KUBECTL scale deployment scale-up --replicas=3
-
-printf "\nWaiting for 20 seconds for karpenter to scale up...\n"
-sleep 20
-
-$TENANT_KUBECTL get pods,nodeclaims,nodes -o wide
-
-# scale down the deployment
-$TENANT_KUBECTL scale deployment scale-up --replicas=0
-
-printf "\nWaiting for 60 seconds for karpenter to scale down...\n"
-sleep 60
-
-$TENANT_KUBECTL get pods,nodeclaims,nodes -o wide
-
-printf "\nTest completed successfully!"
