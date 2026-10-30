@@ -103,7 +103,7 @@ test: vendor unit ## vendor the dependencies and run unit tests
 
 .PHONY: unit
 unit: ## run the unit tests
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./vendor/sigs.k8s.io/cluster-api/api/v1beta1/..." output:crd:artifacts:config=vendor/sigs.k8s.io/cluster-api/api/v1beta1
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./vendor/sigs.k8s.io/cluster-api/api/core/v1beta2/..." output:crd:artifacts:config=vendor/sigs.k8s.io/cluster-api/api/core/v1beta2
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path --bin-dir $(PROJECT_DIR)/bin)" ${GINKGO} ${GINKGO_ARGS} ${GINKGO_EXTRA_ARGS} ./...
 
 .PHONY: vendor

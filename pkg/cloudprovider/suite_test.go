@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/textlogger"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -57,7 +57,7 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join("..", "..", "vendor", "sigs.k8s.io", "cluster-api", "api", "v1beta1"),
+			filepath.Join("..", "..", "vendor", "sigs.k8s.io", "cluster-api", "api", "core", "v1beta2"),
 			filepath.Join("..", "apis", "crds"),
 		},
 		ErrorIfCRDPathMissing: true,
@@ -68,7 +68,7 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	testScheme = scheme.Scheme
-	Expect(capiv1beta1.AddToScheme(testScheme)).To(Succeed())
+	Expect(capiv1beta2.AddToScheme(testScheme)).To(Succeed())
 	Expect(v1alpha1.AddToScheme(testScheme)).To(Succeed())
 	// Expect(karpv1.SchemeBuilder.AddToScheme(testScheme)).To(Succeed())
 

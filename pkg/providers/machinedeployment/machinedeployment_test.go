@@ -24,7 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
@@ -37,9 +37,9 @@ var _ = Describe("MachineDeployment DefaultProvider.Get method", func() {
 	})
 
 	AfterEach(func() {
-		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta2.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
 		Eventually(func() client.ObjectList {
-			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			machineDeploymentList := &capiv1beta2.MachineDeploymentList{}
 			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
 			return machineDeploymentList
 		}).Should(HaveField("Items", HaveLen(0)))
@@ -71,9 +71,9 @@ var _ = Describe("MachineDeployment DefaultProvider.List method", func() {
 	})
 
 	AfterEach(func() {
-		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta2.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
 		Eventually(func() client.ObjectList {
-			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			machineDeploymentList := &capiv1beta2.MachineDeploymentList{}
 			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
 			return machineDeploymentList
 		}).Should(HaveField("Items", HaveLen(0)))
@@ -167,9 +167,9 @@ var _ = Describe("MachineDeployment DefaultProvider.Update method", func() {
 	})
 
 	AfterEach(func() {
-		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta2.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
 		Eventually(func() client.ObjectList {
-			machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+			machineDeploymentList := &capiv1beta2.MachineDeploymentList{}
 			Expect(cl.List(context.Background(), machineDeploymentList, client.InNamespace(testNamespace))).To(Succeed())
 			return machineDeploymentList
 		}).Should(HaveField("Items", HaveLen(0)))
@@ -193,7 +193,7 @@ var _ = Describe("MachineDeployment DefaultProvider.Update method", func() {
 		err = provider.Update(context.Background(), machineDeployment)
 		Expect(err).ToNot(HaveOccurred())
 
-		Eventually(func() *capiv1beta1.MachineDeployment {
+		Eventually(func() *capiv1beta2.MachineDeployment {
 			md, err := provider.Get(context.Background(), machineDeployment.Name, machineDeployment.Namespace)
 			Expect(err).ToNot(HaveOccurred())
 			return md
@@ -201,8 +201,8 @@ var _ = Describe("MachineDeployment DefaultProvider.Update method", func() {
 	})
 })
 
-func newMachineDeployment(name string, clusterName string, karpenterMember bool) *capiv1beta1.MachineDeployment {
-	machineDeployment := &capiv1beta1.MachineDeployment{}
+func newMachineDeployment(name string, clusterName string, karpenterMember bool) *capiv1beta2.MachineDeployment {
+	machineDeployment := &capiv1beta2.MachineDeployment{}
 	machineDeployment.SetName(name)
 	machineDeployment.SetNamespace(testNamespace)
 	if karpenterMember {
@@ -212,5 +212,10 @@ func newMachineDeployment(name string, clusterName string, karpenterMember bool)
 	}
 	machineDeployment.Spec.ClusterName = clusterName
 	machineDeployment.Spec.Template.Spec.ClusterName = clusterName
+	machineDeployment.Spec.Selector = metav1.LabelSelector{MatchLabels: map[string]string{capiv1beta2.MachineDeploymentNameLabel: name}}
+	machineDeployment.Spec.Template.Spec.Bootstrap = capiv1beta2.Bootstrap{DataSecretName: ptr.To("bootstrap-data")}
+	machineDeployment.Spec.Template.Spec.InfrastructureRef = capiv1beta2.ContractVersionedObjectReference{
+		APIGroup: "infrastructure.cluster.x-k8s.io", Kind: "DockerMachineTemplate", Name: name,
+	}
 	return machineDeployment
 }
