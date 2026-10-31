@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-HELM_VERSION=4.3.1
-KIND_VERSION=0.33.0
-KO_VERSION=0.19.1
+: "${HELM_VERSION:?Set HELM_VERSION or run ci-e2e.sh}"
+: "${KIND_VERSION:?Set KIND_VERSION or run ci-e2e.sh}"
+: "${KO_VERSION:?Set KO_VERSION or run ci-e2e.sh}"
 
 MACHINE_ARCH=$(uname -m)
 case "$MACHINE_ARCH" in
