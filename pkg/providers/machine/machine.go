@@ -22,18 +22,18 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type Provider interface {
-	Get(context.Context, string, string) (*capiv1beta1.Machine, error)
-	GetByProviderID(context.Context, string) (*capiv1beta1.Machine, error)
-	List(context.Context, string, *metav1.LabelSelector) ([]*capiv1beta1.Machine, error)
-	IsDeleting(*capiv1beta1.Machine) bool
-	AddDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
-	RemoveDeleteAnnotation(context.Context, *capiv1beta1.Machine) error
-	Update(context.Context, *capiv1beta1.Machine) error
+	Get(context.Context, string, string) (*capiv1beta2.Machine, error)
+	GetByProviderID(context.Context, string) (*capiv1beta2.Machine, error)
+	List(context.Context, string, *metav1.LabelSelector) ([]*capiv1beta2.Machine, error)
+	IsDeleting(*capiv1beta2.Machine) bool
+	AddDeleteAnnotation(context.Context, *capiv1beta2.Machine) error
+	RemoveDeleteAnnotation(context.Context, *capiv1beta2.Machine) error
+	Update(context.Context, *capiv1beta2.Machine) error
 }
 
 type DefaultProvider struct {
@@ -46,8 +46,8 @@ func NewDefaultProvider(_ context.Context, kubeClient client.Client) *DefaultPro
 	}
 }
 
-func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string) (*capiv1beta1.Machine, error) {
-	machine := &capiv1beta1.Machine{}
+func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string) (*capiv1beta2.Machine, error) {
+	machine := &capiv1beta2.Machine{}
 	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, machine)
 	if err != nil {
 		machine = nil
@@ -58,15 +58,15 @@ func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string
 // GetByProviderID returns the Machine indicated by the supplied Provider ID or nil if not found.
 // Because Get is used with a provider ID, it may return a Machine that does not have
 // a label for node pool membership.
-func (p *DefaultProvider) GetByProviderID(ctx context.Context, providerID string) (*capiv1beta1.Machine, error) {
-	machineList := &capiv1beta1.MachineList{}
+func (p *DefaultProvider) GetByProviderID(ctx context.Context, providerID string) (*capiv1beta2.Machine, error) {
+	machineList := &capiv1beta2.MachineList{}
 	err := p.kubeClient.List(ctx, machineList)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list machines during Machine Provider Get request: %w", err)
 	}
 
 	for _, m := range machineList.Items {
-		if m.Spec.ProviderID != nil && *m.Spec.ProviderID == providerID {
+		if m.Spec.ProviderID != "" && m.Spec.ProviderID == providerID {
 			return &m, nil
 		}
 	}
@@ -74,8 +74,8 @@ func (p *DefaultProvider) GetByProviderID(ctx context.Context, providerID string
 	return nil, nil
 }
 
-func (p *DefaultProvider) List(ctx context.Context, namespace string, selector *metav1.LabelSelector) ([]*capiv1beta1.Machine, error) {
-	machines := []*capiv1beta1.Machine{}
+func (p *DefaultProvider) List(ctx context.Context, namespace string, selector *metav1.LabelSelector) ([]*capiv1beta2.Machine, error) {
+	machines := []*capiv1beta2.Machine{}
 
 	listOptions := []client.ListOption{}
 
@@ -91,7 +91,7 @@ func (p *DefaultProvider) List(ctx context.Context, namespace string, selector *
 		listOptions = append(listOptions, &client.ListOptions{LabelSelector: sm})
 	}
 
-	machineList := &capiv1beta1.MachineList{}
+	machineList := &capiv1beta2.MachineList{}
 	err := p.kubeClient.List(ctx, machineList, listOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list machines with selector: %w", err)
@@ -105,13 +105,13 @@ func (p *DefaultProvider) List(ctx context.Context, namespace string, selector *
 }
 
 // IsDeleting returns true if the supplied Machine has a non-zero deletion timestamp.
-func (p *DefaultProvider) IsDeleting(machine *capiv1beta1.Machine) bool {
+func (p *DefaultProvider) IsDeleting(machine *capiv1beta2.Machine) bool {
 	return machine != nil && !machine.GetDeletionTimestamp().IsZero()
 }
 
 // AddDeleteAnnotation adds the Cluster API deletion annotation to a Machine resource and updates
 // the API server. It returns an error if there is a failure.
-func (p *DefaultProvider) AddDeleteAnnotation(ctx context.Context, machine *capiv1beta1.Machine) error {
+func (p *DefaultProvider) AddDeleteAnnotation(ctx context.Context, machine *capiv1beta2.Machine) error {
 	if machine == nil {
 		return fmt.Errorf("cannot add deletion annotation to Machine, nil value")
 	}
@@ -121,8 +121,8 @@ func (p *DefaultProvider) AddDeleteAnnotation(ctx context.Context, machine *capi
 		annotations = map[string]string{}
 	}
 
-	if _, found := annotations[capiv1beta1.DeleteMachineAnnotation]; !found {
-		annotations[capiv1beta1.DeleteMachineAnnotation] = time.Now().String()
+	if _, found := annotations[capiv1beta2.DeleteMachineAnnotation]; !found {
+		annotations[capiv1beta2.DeleteMachineAnnotation] = time.Now().String()
 		machine.SetAnnotations(annotations)
 		err := p.kubeClient.Update(ctx, machine)
 		if err != nil {
@@ -135,7 +135,7 @@ func (p *DefaultProvider) AddDeleteAnnotation(ctx context.Context, machine *capi
 
 // RemoveDeleteAnnotation removes the Cluster API deletion annotation from a Machine resource and
 // updates the API server. It returns an error if there is a failure.
-func (p *DefaultProvider) RemoveDeleteAnnotation(ctx context.Context, machine *capiv1beta1.Machine) error {
+func (p *DefaultProvider) RemoveDeleteAnnotation(ctx context.Context, machine *capiv1beta2.Machine) error {
 	if machine == nil {
 		return fmt.Errorf("cannot remove deletion annotation from Machine, nil value")
 	}
@@ -145,8 +145,8 @@ func (p *DefaultProvider) RemoveDeleteAnnotation(ctx context.Context, machine *c
 		annotations = map[string]string{}
 	}
 
-	if _, found := annotations[capiv1beta1.DeleteMachineAnnotation]; found {
-		delete(annotations, capiv1beta1.DeleteMachineAnnotation)
+	if _, found := annotations[capiv1beta2.DeleteMachineAnnotation]; found {
+		delete(annotations, capiv1beta2.DeleteMachineAnnotation)
 		machine.SetAnnotations(annotations)
 		err := p.kubeClient.Update(ctx, machine)
 		if err != nil {
@@ -157,7 +157,7 @@ func (p *DefaultProvider) RemoveDeleteAnnotation(ctx context.Context, machine *c
 	return nil
 }
 
-func (p *DefaultProvider) Update(ctx context.Context, machine *capiv1beta1.Machine) error {
+func (p *DefaultProvider) Update(ctx context.Context, machine *capiv1beta2.Machine) error {
 	err := p.kubeClient.Update(ctx, machine)
 	if err != nil {
 		return fmt.Errorf("unable to update Machine%q: %w", machine.Name, err)

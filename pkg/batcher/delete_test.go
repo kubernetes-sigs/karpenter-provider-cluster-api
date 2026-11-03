@@ -23,7 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/batcher"
 )
@@ -83,7 +83,7 @@ var _ = Describe("Delete Batching", func() {
 		for i := range 5 {
 			m := fakeMP.GetMachine(fmt.Sprintf("machine-%d", i), "default")
 			Expect(m).NotTo(BeNil())
-			Expect(m.Annotations).To(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+			Expect(m.Annotations).To(HaveKey(capiv1beta2.DeleteMachineAnnotation))
 		}
 	})
 
@@ -187,7 +187,7 @@ var _ = Describe("Delete Batching", func() {
 		for i := range 3 {
 			m := fakeMP.GetMachine(fmt.Sprintf("machine-%d", i), "default")
 			Expect(m).NotTo(BeNil())
-			Expect(m.Annotations).NotTo(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+			Expect(m.Annotations).NotTo(HaveKey(capiv1beta2.DeleteMachineAnnotation))
 		}
 	})
 
@@ -270,7 +270,7 @@ var _ = Describe("Delete Batching", func() {
 		for i := range 2 {
 			m := fakeMP.GetMachine(fmt.Sprintf("machine-%d", i), "default")
 			Expect(m).NotTo(BeNil())
-			Expect(m.Annotations).NotTo(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+			Expect(m.Annotations).NotTo(HaveKey(capiv1beta2.DeleteMachineAnnotation))
 		}
 	})
 

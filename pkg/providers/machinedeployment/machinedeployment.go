@@ -21,15 +21,15 @@ import (
 	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
 )
 
 type Provider interface {
-	Get(context.Context, string, string) (*capiv1beta1.MachineDeployment, error)
-	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error)
-	Update(context.Context, *capiv1beta1.MachineDeployment) error
+	Get(context.Context, string, string) (*capiv1beta2.MachineDeployment, error)
+	List(context.Context, *metav1.LabelSelector) ([]*capiv1beta2.MachineDeployment, error)
+	Update(context.Context, *capiv1beta2.MachineDeployment) error
 }
 
 type DefaultProvider struct {
@@ -42,8 +42,8 @@ func NewDefaultProvider(_ context.Context, kubeClient client.Client) *DefaultPro
 	}
 }
 
-func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string) (*capiv1beta1.MachineDeployment, error) {
-	machineDeployment := &capiv1beta1.MachineDeployment{}
+func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string) (*capiv1beta2.MachineDeployment, error) {
+	machineDeployment := &capiv1beta2.MachineDeployment{}
 	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, machineDeployment)
 	if err != nil {
 		machineDeployment = nil
@@ -52,8 +52,8 @@ func (p *DefaultProvider) Get(ctx context.Context, name string, namespace string
 	return machineDeployment, nil
 }
 
-func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelector) ([]*capiv1beta1.MachineDeployment, error) {
-	machineDeployments := []*capiv1beta1.MachineDeployment{}
+func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelector) ([]*capiv1beta2.MachineDeployment, error) {
+	machineDeployments := []*capiv1beta2.MachineDeployment{}
 
 	listOptions := []client.ListOption{
 		client.MatchingLabels{
@@ -68,7 +68,7 @@ func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelect
 		}
 		listOptions = append(listOptions, &client.ListOptions{LabelSelector: sm})
 	}
-	machineDeploymentList := &capiv1beta1.MachineDeploymentList{}
+	machineDeploymentList := &capiv1beta2.MachineDeploymentList{}
 	err := p.kubeClient.List(ctx, machineDeploymentList, listOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("unable to list MachineDeployments with selector: %w", err)
@@ -81,7 +81,7 @@ func (p *DefaultProvider) List(ctx context.Context, selector *metav1.LabelSelect
 	return machineDeployments, nil
 }
 
-func (p *DefaultProvider) Update(ctx context.Context, machineDeployment *capiv1beta1.MachineDeployment) error {
+func (p *DefaultProvider) Update(ctx context.Context, machineDeployment *capiv1beta2.MachineDeployment) error {
 	err := p.kubeClient.Update(ctx, machineDeployment)
 	if err != nil {
 		return fmt.Errorf("unable to update MachineDeployment %q: %w", machineDeployment.Name, err)

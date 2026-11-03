@@ -26,7 +26,7 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	karpv1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 
@@ -37,7 +37,7 @@ var ctx context.Context
 var cancel context.CancelFunc
 
 func init() {
-	_ = capiv1beta1.AddToScheme(scheme.Scheme)
+	_ = capiv1beta2.AddToScheme(scheme.Scheme)
 }
 
 func TestBatcher(t *testing.T) {
