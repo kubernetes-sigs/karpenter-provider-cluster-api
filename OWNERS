@@ -3,7 +3,6 @@
 approvers:
   - elmiko
   - sig-cluster-lifecycle-leads
-  - cluster-api-admins
   - cluster-api-maintainers
 
 reviewers:
