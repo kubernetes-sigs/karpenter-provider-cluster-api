@@ -2,27 +2,29 @@
 
 set -euo pipefail
 
-CAPK_VERSION=v0.10.1
-CAPI_VERSION=release-1.10
-CALICO_VERSION=v3.31.5
-DEFAULT_KIND_IMAGE=kindest/node:v1.32.8
+: "${CAPK_VERSION:?Set CAPK_VERSION or run ci-e2e.sh}"
+: "${CAPI_VERSION:?Set CAPI_VERSION or run ci-e2e.sh}"
+: "${CALICO_VERSION:?Set CALICO_VERSION or run ci-e2e.sh}"
+: "${KIND_CLUSTER_IMAGE:?Set KIND_CLUSTER_IMAGE or run ci-e2e.sh}"
 
-WORKSPACE="${WORKSPACE:-$(pwd)}"
-mkdir -p "$WORKSPACE"
-cd "$WORKSPACE"
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 
-if [[ ! -d cluster-api-provider-kubemark ]]; then
+CLONE_WORKSPACE="${CLONE_WORKSPACE:-${WORKSPACE:-$REPO_ROOT}}"
+mkdir -p "$CLONE_WORKSPACE"
+cd "$CLONE_WORKSPACE"
+CLONE_WORKSPACE=$(pwd)
+
+if [[ ! -d $CLONE_WORKSPACE/cluster-api-provider-kubemark ]]; then
   git clone https://github.com/kubernetes-sigs/cluster-api-provider-kubemark.git -b "$CAPK_VERSION" --single-branch
 fi
 
-CAPK_HACK="$WORKSPACE/cluster-api-provider-kubemark/hack"
+CAPK_HACK="$CLONE_WORKSPACE/cluster-api-provider-kubemark/hack"
 
-if [[ ! -d cluster-api ]]; then
+if [[ ! -d $CLONE_WORKSPACE/cluster-api ]]; then
   git clone https://github.com/kubernetes-sigs/cluster-api.git -b "$CAPI_VERSION" --single-branch
 fi
 
-export KIND_CLUSTER_IMAGE="${KIND_CLUSTER_IMAGE:-$DEFAULT_KIND_IMAGE}"
-export CAPI_PATH="$WORKSPACE/cluster-api"
+export CAPI_PATH="$CLONE_WORKSPACE/cluster-api"
 
 # don't run the entire suite with make -C cluster-api-provider-kubemark/hack/tests test-e2e
 # we want to create our own machine deployments and scale them up with karpenter
@@ -39,6 +41,20 @@ make -C "$CAPK_HACK/tests" .docker-build
 make -C "$CAPK_HACK/tests" .create-local-repository
 make -C "$CAPK_HACK/tests" .config-local-repository
 make -C "$CAPK_HACK/tests" .deploy-cluster-api
+
+# TODO(maxcao13): This is a hack to wait for the KubeadmControlPlane webhook to become ready
+# e2es sometimes fail because of race conditions where the webhook with failurePolicy set to Fail exists but can't serve,
+# and we immediately try to create the offending object in .create-tenant-cluster-control-plane.
+echo "Waiting for KubeadmControlPlane webhook..."
+DEADLINE=$((SECONDS + 60))
+until kubectl create --dry-run=server -f "$CAPK_HACK/tests/resources/docker-control-plane.yaml" 2>/dev/null; do
+  if (( SECONDS >= DEADLINE )); then
+    echo "Timed out waiting for webhook to become ready"
+    exit 1
+  fi
+  sleep 5
+done
+
 make -C "$CAPK_HACK/tests" .create-tenant-cluster-control-plane
 # make -C "$CAPK_HACK/tests" .create-tenant-cluster-hollow-nodes # purposefully ignoring
 make -C "$CAPK_HACK/tests" .generate-tenant-cluster-kubeconfig
@@ -47,10 +63,10 @@ make -C "$CAPK_HACK/tests" .tenant-cluster-info
 TENANT_KUBECTL="kubectl --kubeconfig /tmp/km.kubeconfig"
 
 # apply capi workload resources
-kubectl apply -f "$WORKSPACE"/test/resources/kubemark-machine-deployment.yaml
+kubectl apply -f "$REPO_ROOT"/test/resources/kubemark-machine-deployment.yaml
 
 # apply calico for CNI
-$TENANT_KUBECTL apply -f https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/calico.yaml
+$TENANT_KUBECTL apply -f "https://raw.githubusercontent.com/projectcalico/calico/$CALICO_VERSION/manifests/calico.yaml"
 
 # we have to manually edit the management kubeconfig for karpenter to use from within the tenant cluster
 # use Kind control-plane container's IP as server
@@ -61,35 +77,5 @@ sed -i "s|server: .*|server: https://${KIND_CP_IP}:6443|g" /tmp/mgmt.kubeconfig
 sed -i '/certificate-authority-data:/d' /tmp/mgmt.kubeconfig
 sed -i '/server: https:\/\//a\    insecure-skip-tls-verify: true' /tmp/mgmt.kubeconfig
 $TENANT_KUBECTL create configmap mgmt-kubeconfig \
-  --from-file=kubeconfig=/tmp/mgmt.kubeconfig -n kube-system
-
-# apply karpenter deployment manifests and CRDs
-# deployment should have the mounted configmap
-KIND_CLUSTER_NAME=km-cp KWOK_REPO=kind.local KUBECONFIG=/tmp/km.kubeconfig make apply
-
-$TENANT_KUBECTL wait -n kube-system deployment karpenter --for condition=Available --timeout=2m
-
-# TODO(maxcao13): below is a temporary validation test that karpenter works, we should remove this when we have real tests
-
-# apply karpenter workload manifests
-$TENANT_KUBECTL apply -f "$WORKSPACE"/test/resources/default_clusterapinodeclass.yaml
-$TENANT_KUBECTL apply -f "$WORKSPACE"/test/resources/default_nodepool.yaml
-$TENANT_KUBECTL apply -f "$WORKSPACE"/test/resources/sample_deployment.yaml
-
-# scale up the deployment
-$TENANT_KUBECTL scale deployment scale-up --replicas=3
-
-printf "\nWaiting for 20 seconds for karpenter to scale up...\n"
-sleep 20
-
-$TENANT_KUBECTL get pods,nodeclaims,nodes -o wide
-
-# scale down the deployment
-$TENANT_KUBECTL scale deployment scale-up --replicas=0
-
-printf "\nWaiting for 60 seconds for karpenter to scale down...\n"
-sleep 60
-
-$TENANT_KUBECTL get pods,nodeclaims,nodes -o wide
-
-printf "\nTest completed successfully!"
+  --from-file=kubeconfig=/tmp/mgmt.kubeconfig -n kube-system --dry-run=client -o yaml | \
+  $TENANT_KUBECTL apply -f -
