@@ -2,8 +2,8 @@
 
 set -euo pipefail
 
-CAPK_VERSION=v0.10.1
-CAPI_VERSION=release-1.10
+CAPK_VERSION=v0.12.0
+CAPI_VERSION=release-1.12
 CALICO_VERSION=v3.31.5
 DEFAULT_KIND_IMAGE=kindest/node:v1.32.8
 
@@ -27,9 +27,9 @@ export CAPI_PATH="$WORKSPACE/cluster-api"
 # don't run the entire suite with make -C cluster-api-provider-kubemark/hack/tests test-e2e
 # we want to create our own machine deployments and scale them up with karpenter
  
-# kubemark script doesn't delete the tenant cluster, if it exists
-kind delete cluster --name km-cp
 
+make -C "$CAPK_HACK/tests" .delete-kind-clusters
+make -C "$CAPK_HACK/tests" .create-docker-network
 make -C "$CAPK_HACK/tests" .start-kind-cluster
 make -C "$CAPK_HACK/tests" .install-cert-manager
 make -C "$CAPK_HACK/tests" .capi-build-clusterctl
@@ -39,8 +39,25 @@ make -C "$CAPK_HACK/tests" .docker-build
 make -C "$CAPK_HACK/tests" .create-local-repository
 make -C "$CAPK_HACK/tests" .config-local-repository
 make -C "$CAPK_HACK/tests" .deploy-cluster-api
-make -C "$CAPK_HACK/tests" .create-tenant-cluster-control-plane
+# CAPD's webhook can refuse connections for a few seconds after its Deployment
+# reports Available, so retry creating the tenant control plane. The step only
+# applies manifests and waits, so it is safe to repeat.
+for attempt in 1 2 3 4 5; do
+  if make -C "$CAPK_HACK/tests" .create-tenant-cluster-control-plane; then
+    break
+  fi
+  if [[ $attempt -eq 5 ]]; then
+    echo "creating the tenant cluster control plane failed after $attempt attempts" >&2
+    exit 1
+  fi
+  echo "creating the tenant cluster control plane failed (attempt $attempt), retrying in 15s"
+  sleep 15
+done
 # make -C "$CAPK_HACK/tests" .create-tenant-cluster-hollow-nodes # purposefully ignoring
+# .create-tenant-cluster-control-plane only waits for InfrastructureReady. CAPK's own
+# test-e2e has time to spare because the hollow node step comes next, but we skip it,
+# so wait until the control plane is up and its kubeconfig Secret exists.
+kubectl wait cluster km-cp --for=condition=ControlPlaneInitialized=true --timeout=10m
 make -C "$CAPK_HACK/tests" .generate-tenant-cluster-kubeconfig
 make -C "$CAPK_HACK/tests" .tenant-cluster-info
 

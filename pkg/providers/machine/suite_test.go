@@ -27,7 +27,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2/textlogger"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -39,7 +39,7 @@ const (
 )
 
 func init() {
-	if err := capiv1beta1.AddToScheme(scheme.Scheme); err != nil {
+	if err := capiv1beta2.AddToScheme(scheme.Scheme); err != nil {
 		panic(err)
 	}
 }
@@ -61,11 +61,11 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
-			filepath.Join("../../..", "vendor", "sigs.k8s.io", "cluster-api", "api", "v1beta1"),
+			filepath.Join("../../..", "vendor", "sigs.k8s.io", "cluster-api", "api", "core", "v1beta2"),
 		},
 	}
 
-	Expect(capiv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(capiv1beta2.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())

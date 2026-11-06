@@ -27,8 +27,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/providers"
@@ -63,8 +64,8 @@ var _ = Describe("CloudProvider.Create method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
-		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.Machine{}, &capiv1beta2.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.MachineDeployment{}, &capiv1beta2.MachineDeploymentList{})
 		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
 	})
 
@@ -97,8 +98,8 @@ var _ = Describe("CloudProvider.Delete method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
-		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.Machine{}, &capiv1beta2.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.MachineDeployment{}, &capiv1beta2.MachineDeploymentList{})
 	})
 
 	It("returns an error when the NodeClaim does not have a provider ID", func() {
@@ -122,8 +123,8 @@ var _ = Describe("CloudProvider.Delete method", func() {
 	It("returns an error when the owner MachineDeployment is not found", func() {
 		mdName := "non-existent-md"
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = mdName
-		providerID := *machine.Spec.ProviderID
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = mdName
+		providerID := machine.Spec.ProviderID
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaim := karpv1.NodeClaim{
@@ -140,8 +141,8 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
-		providerID := *machine.Spec.ProviderID
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := machine.Spec.ProviderID
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaim := karpv1.NodeClaim{
@@ -159,8 +160,8 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
-		providerID := *machine.Spec.ProviderID
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := machine.Spec.ProviderID
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaim := karpv1.NodeClaim{
@@ -178,12 +179,12 @@ var _ = Describe("CloudProvider.Delete method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
-		providerID := *machine.Spec.ProviderID
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := machine.Spec.ProviderID
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		machine = newMachine("m-2", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaim := karpv1.NodeClaim{
@@ -198,9 +199,9 @@ var _ = Describe("CloudProvider.Delete method", func() {
 			m, err := provider.machineProvider.GetByProviderID(context.Background(), providerID)
 			Expect(err).ToNot(HaveOccurred())
 			return m.GetAnnotations()
-		}).Should(HaveKey(capiv1beta1.DeleteMachineAnnotation))
+		}).Should(HaveKey(capiv1beta2.DeleteMachineAnnotation))
 
-		Eventually(func() *capiv1beta1.MachineDeployment {
+		Eventually(func() *capiv1beta2.MachineDeployment {
 			md, err := provider.machineDeploymentProvider.Get(context.Background(), machineDeployment.Name, machineDeployment.Namespace)
 			Expect(err).ToNot(HaveOccurred())
 			return md
@@ -218,8 +219,8 @@ var _ = Describe("CloudProvider.Get method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
-		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.Machine{}, &capiv1beta2.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.MachineDeployment{}, &capiv1beta2.MachineDeploymentList{})
 	})
 
 	It("returns an error when no provider ID is supplied", func() {
@@ -244,12 +245,12 @@ var _ = Describe("CloudProvider.Get method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
-		providerID := *machine.Spec.ProviderID
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
+		providerID := machine.Spec.ProviderID
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		machine = newMachine("m-2", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaim, err := provider.Get(context.Background(), providerID)
@@ -270,7 +271,7 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 
 	AfterEach(func() {
 		eventuallyDeleteAllOf(cl, &karpv1.NodePool{}, &karpv1.NodePoolList{})
-		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.MachineDeployment{}, &capiv1beta2.MachineDeploymentList{})
 		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
 	})
 
@@ -327,8 +328,8 @@ var _ = Describe("CloudProvider.List method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
-		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.Machine{}, &capiv1beta2.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.MachineDeployment{}, &capiv1beta2.MachineDeploymentList{})
 	})
 
 	It("returns an empty list when no Machines are present", func() {
@@ -347,7 +348,7 @@ var _ = Describe("CloudProvider.List method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaims, err := provider.List(context.Background())
@@ -365,7 +366,7 @@ var _ = Describe("CloudProvider.List method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		machine = newMachine("m-2", "test-cluster", false)
@@ -388,7 +389,7 @@ var _ = Describe("CloudProvider.findInstanceTypesForNodeClass method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.MachineDeployment{}, &capiv1beta2.MachineDeploymentList{})
 		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
 	})
 
@@ -409,8 +410,8 @@ var _ = Describe("CloudProvider.machineToNodeClaim method", func() {
 	})
 
 	AfterEach(func() {
-		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
-		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.Machine{}, &capiv1beta2.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta2.MachineDeployment{}, &capiv1beta2.MachineDeploymentList{})
 	})
 
 	It("returns the proper capacity information in the NodeClaim", func() {
@@ -423,7 +424,7 @@ var _ = Describe("CloudProvider.machineToNodeClaim method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
@@ -444,7 +445,7 @@ var _ = Describe("CloudProvider.machineToNodeClaim method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
@@ -461,7 +462,7 @@ var _ = Describe("CloudProvider.machineToNodeClaim method", func() {
 		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
 
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = machineDeployment.Name
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 
 		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
@@ -479,7 +480,7 @@ var _ = Describe("CloudProvider.machineToNodeClaim method", func() {
 
 	It("returns a not found error when the MachineDeployment is not found", func() {
 		machine := newMachine("m-1", "test-cluster", true)
-		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = "md-1"
+		machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel] = "md-1"
 		Expect(cl.Create(context.Background(), machine)).To(Succeed())
 		nodeClaim, err := provider.machineToNodeClaim(context.Background(), machine)
 		Expect(nodeClaim).To(BeNil())
@@ -735,7 +736,7 @@ var _ = Describe("isBelowMaxSize function", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
 		md.Spec.Replicas = ptr.To(int32(3))
 		md.Annotations = map[string]string{
-			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+			capiv1beta2.AutoscalerMaxSizeAnnotation: "10",
 		}
 		Expect(isBelowMaxSize(md)).To(BeTrue())
 	})
@@ -744,7 +745,7 @@ var _ = Describe("isBelowMaxSize function", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
 		md.Spec.Replicas = ptr.To(int32(10))
 		md.Annotations = map[string]string{
-			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+			capiv1beta2.AutoscalerMaxSizeAnnotation: "10",
 		}
 		Expect(isBelowMaxSize(md)).To(BeFalse())
 	})
@@ -753,7 +754,7 @@ var _ = Describe("isBelowMaxSize function", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
 		md.Spec.Replicas = ptr.To(int32(12))
 		md.Annotations = map[string]string{
-			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+			capiv1beta2.AutoscalerMaxSizeAnnotation: "10",
 		}
 		Expect(isBelowMaxSize(md)).To(BeFalse())
 	})
@@ -762,7 +763,7 @@ var _ = Describe("isBelowMaxSize function", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
 		md.Spec.Replicas = ptr.To(int32(5))
 		md.Annotations = map[string]string{
-			capiv1beta1.AutoscalerMaxSizeAnnotation: "not-a-number",
+			capiv1beta2.AutoscalerMaxSizeAnnotation: "not-a-number",
 		}
 		Expect(isBelowMaxSize(md)).To(BeTrue())
 	})
@@ -771,7 +772,7 @@ var _ = Describe("isBelowMaxSize function", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
 		md.Spec.Replicas = nil
 		md.Annotations = map[string]string{
-			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+			capiv1beta2.AutoscalerMaxSizeAnnotation: "10",
 		}
 		Expect(isBelowMaxSize(md)).To(BeTrue())
 	})
@@ -780,7 +781,7 @@ var _ = Describe("isBelowMaxSize function", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
 		md.Spec.Replicas = ptr.To(int32(0))
 		md.Annotations = map[string]string{
-			capiv1beta1.AutoscalerMaxSizeAnnotation: "0",
+			capiv1beta2.AutoscalerMaxSizeAnnotation: "0",
 		}
 		Expect(isBelowMaxSize(md)).To(BeFalse())
 	})
@@ -791,7 +792,7 @@ var _ = Describe("machineDeploymentToInstanceType max size behavior", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
 		md.Spec.Replicas = ptr.To(int32(10))
 		md.Annotations = map[string]string{
-			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+			capiv1beta2.AutoscalerMaxSizeAnnotation: "10",
 		}
 		instanceType := machineDeploymentToInstanceType(md)
 		Expect(instanceType.Offerings).To(HaveLen(1))
@@ -802,7 +803,7 @@ var _ = Describe("machineDeploymentToInstanceType max size behavior", func() {
 		md := newMachineDeployment("md-1", "test-cluster", true)
 		md.Spec.Replicas = ptr.To(int32(3))
 		md.Annotations = map[string]string{
-			capiv1beta1.AutoscalerMaxSizeAnnotation: "10",
+			capiv1beta2.AutoscalerMaxSizeAnnotation: "10",
 		}
 		instanceType := machineDeploymentToInstanceType(md)
 		Expect(instanceType.Offerings).To(HaveLen(1))
@@ -810,8 +811,8 @@ var _ = Describe("machineDeploymentToInstanceType max size behavior", func() {
 	})
 })
 
-func newMachine(machineName string, clusterName string, karpenterMember bool) *capiv1beta1.Machine {
-	machine := &capiv1beta1.Machine{}
+func newMachine(machineName string, clusterName string, karpenterMember bool) *capiv1beta2.Machine {
+	machine := &capiv1beta2.Machine{}
 	machine.SetName(machineName)
 	machine.SetNamespace(testNamespace)
 	if karpenterMember {
@@ -821,12 +822,16 @@ func newMachine(machineName string, clusterName string, karpenterMember bool) *c
 	}
 	machine.Spec.ClusterName = clusterName
 	providerID := fmt.Sprintf("clusterapi://mock-%d\n", randsrc.Uint32())
-	machine.Spec.ProviderID = &providerID
+	machine.Spec.ProviderID = providerID
+	machine.Spec.Bootstrap = capiv1beta2.Bootstrap{DataSecretName: ptr.To("bootstrap-data")}
+	machine.Spec.InfrastructureRef = capiv1beta2.ContractVersionedObjectReference{
+		APIGroup: "infrastructure.cluster.x-k8s.io", Kind: "DockerMachine", Name: machineName,
+	}
 	return machine
 }
 
-func newMachineDeployment(name string, clusterName string, karpenterMember bool) *capiv1beta1.MachineDeployment {
-	machineDeployment := &capiv1beta1.MachineDeployment{}
+func newMachineDeployment(name string, clusterName string, karpenterMember bool) *capiv1beta2.MachineDeployment {
+	machineDeployment := &capiv1beta2.MachineDeployment{}
 	machineDeployment.SetName(name)
 	machineDeployment.SetNamespace(testNamespace)
 	if karpenterMember {
@@ -836,5 +841,10 @@ func newMachineDeployment(name string, clusterName string, karpenterMember bool)
 	}
 	machineDeployment.Spec.ClusterName = clusterName
 	machineDeployment.Spec.Template.Spec.ClusterName = clusterName
+	machineDeployment.Spec.Selector = metav1.LabelSelector{MatchLabels: map[string]string{capiv1beta2.MachineDeploymentNameLabel: name}}
+	machineDeployment.Spec.Template.Spec.Bootstrap = capiv1beta2.Bootstrap{DataSecretName: ptr.To("bootstrap-data")}
+	machineDeployment.Spec.Template.Spec.InfrastructureRef = capiv1beta2.ContractVersionedObjectReference{
+		APIGroup: "infrastructure.cluster.x-k8s.io", Kind: "DockerMachineTemplate", Name: name,
+	}
 	return machineDeployment
 }
