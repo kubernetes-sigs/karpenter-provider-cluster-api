@@ -25,7 +25,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
@@ -53,25 +52,31 @@ type Operator struct {
 
 	MachineProvider           machine.Provider
 	MachineDeploymentProvider machinedeployment.Provider
+	// ManagementCluster is the cluster holding the Cluster API resources, whose
+	// cache controllers can watch them through.
+	ManagementCluster cluster.Cluster
 }
 
 func NewOperator(ctx context.Context, operator *operator.Operator) (context.Context, *Operator) {
-	mgmtCluster, err := buildManagementClusterKubeClient(ctx, operator)
+	mgmtCluster, err := buildManagementCluster(ctx, operator)
 	if err != nil {
 		log.Fatalf("unable to build management cluster client: %v", err)
 	}
 
-	machineProvider := machine.NewDefaultProvider(ctx, mgmtCluster)
-	machineDeploymentProvider := machinedeployment.NewDefaultProvider(ctx, mgmtCluster)
+	machineProvider := machine.NewDefaultProvider(ctx, mgmtCluster.GetClient())
+	machineDeploymentProvider := machinedeployment.NewDefaultProvider(ctx, mgmtCluster.GetClient())
 
 	return ctx, &Operator{
 		Operator:                  operator,
 		MachineProvider:           machineProvider,
 		MachineDeploymentProvider: machineDeploymentProvider,
+		ManagementCluster:         mgmtCluster,
 	}
 }
 
-func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Operator) (client.Client, error) {
+// buildManagementCluster returns the cluster holding the Cluster API resources:
+// a separate cluster when one is configured, otherwise Karpenter's own.
+func buildManagementCluster(ctx context.Context, operator *operator.Operator) (cluster.Cluster, error) {
 	clusterAPIKubeConfig, err := buildClusterCAPIKubeConfig(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to build cluster API kube config: %w", err)
@@ -87,9 +92,9 @@ func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Op
 		if err = operator.Add(mgmtCluster); err != nil {
 			return nil, fmt.Errorf("unable to add management cluster to operator: %w", err)
 		}
-		return mgmtCluster.GetClient(), nil
+		return mgmtCluster, nil
 	}
-	return operator.GetClient(), nil
+	return operator.Manager, nil
 }
 
 func buildClusterCAPIKubeConfig(ctx context.Context) (*rest.Config, error) {

@@ -29,6 +29,52 @@ type ClusterAPINodeClassSpec struct {
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 	// https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/label-selector/
 	ScalableResourceSelector *metav1.LabelSelector `json:"scalableResourceSelector,omitempty"`
+
+	// upgrades configures how nodes are replaced when the Machine behind a node
+	// no longer matches its MachineDeployment, for example after a Kubernetes
+	// version bump or a template change.
+	// +optional
+	Upgrades *UpgradesSpec `json:"upgrades,omitempty"`
+}
+
+// UpgradeManager names the controller that replaces nodes whose Machine no
+// longer matches its MachineDeployment.
+// +kubebuilder:validation:Enum=ClusterAPI;Karpenter
+type UpgradeManager string
+
+const (
+	// UpgradeManagerClusterAPI leaves upgrades to Cluster API. Karpenter does not
+	// report drift for MachineDeployment changes, and the provider adopts the
+	// Machines that Cluster API creates when it replaces Karpenter's during a
+	// rollout, so Karpenter keeps managing the pool. To also stop Karpenter
+	// replacing nodes for its own drift reasons, add a NodePool disruption
+	// budget with reasons [Drifted] and nodes "0".
+	UpgradeManagerClusterAPI UpgradeManager = "ClusterAPI"
+
+	// UpgradeManagerKarpenter makes Karpenter replace nodes: a NodeClaim whose
+	// Machine belongs to a MachineSet other than its MachineDeployment's current
+	// one is drifted, and Karpenter replaces it within its disruption budgets.
+	// The MachineDeployment's rollout strategy should be OnDelete, so Cluster
+	// API does not replace the same Machines itself.
+	UpgradeManagerKarpenter UpgradeManager = "Karpenter"
+)
+
+// UpgradesSpec configures node upgrades for a ClusterAPINodeClass.
+type UpgradesSpec struct {
+	// managedBy is the controller that replaces nodes whose Machine no longer
+	// matches its MachineDeployment: ClusterAPI (the default) or Karpenter.
+	// +kubebuilder:default=ClusterAPI
+	// +optional
+	ManagedBy UpgradeManager `json:"managedBy,omitempty"`
+}
+
+// UpgradeManager returns who replaces outdated nodes for this NodeClass,
+// ClusterAPI when it is not set.
+func (nc *ClusterAPINodeClass) UpgradeManager() UpgradeManager {
+	if nc.Spec.Upgrades == nil || nc.Spec.Upgrades.ManagedBy == "" {
+		return UpgradeManagerClusterAPI
+	}
+	return nc.Spec.Upgrades.ManagedBy
 }
 
 // ClusterAPINodeClassStatus is the status for ClusterAPINodeClasses

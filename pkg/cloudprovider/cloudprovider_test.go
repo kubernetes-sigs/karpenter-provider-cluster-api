@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -314,6 +315,88 @@ var _ = Describe("CloudProvider.GetInstanceTypes method", func() {
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(instanceTypes).To(HaveLen(1))
+	})
+})
+
+var _ = Describe("CloudProvider.IsDrifted method", func() {
+	var provider *CloudProvider
+	var machineDeployment *capiv1beta1.MachineDeployment
+
+	// createNodeClaim creates a NodeClass with the given upgrade manager, and a
+	// Machine in the given MachineSet, and returns a NodeClaim for that Machine.
+	createNodeClaim := func(upgradeManager v1alpha1.UpgradeManager, machineSetName string) *karpv1.NodeClaim {
+		nodeClass := &v1alpha1.ClusterAPINodeClass{}
+		nodeClass.Name = "default"
+		if upgradeManager != "" {
+			nodeClass.Spec.Upgrades = &v1alpha1.UpgradesSpec{ManagedBy: upgradeManager}
+		}
+		Expect(cl.Create(context.Background(), nodeClass)).To(Succeed())
+
+		machine := newMachine("m-1", "test-cluster", true)
+		machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel] = machineDeployment.Name
+		if machineSetName != "" {
+			machine.GetLabels()[capiv1beta1.MachineSetNameLabel] = machineSetName
+		}
+		Expect(cl.Create(context.Background(), machine)).To(Succeed())
+
+		nodeClaim := &karpv1.NodeClaim{}
+		nodeClaim.Name = "nodeclaim-1"
+		nodeClaim.Spec.NodeClassRef = &karpv1.NodeClassReference{Name: nodeClass.Name}
+		nodeClaim.Status.ProviderID = *machine.Spec.ProviderID
+		return nodeClaim
+	}
+
+	BeforeEach(func() {
+		machineProvider := machine.NewDefaultProvider(context.Background(), cl)
+		machineDeploymentProvider := machinedeployment.NewDefaultProvider(context.Background(), cl)
+		provider = NewCloudProvider(context.Background(), cl, machineProvider, machineDeploymentProvider)
+
+		machineDeployment = newMachineDeployment("md-1", "test-cluster", true)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+		Expect(cl.Create(context.Background(), newMachineSet("ms-old", machineDeployment, "1"))).To(Succeed())
+		Expect(cl.Create(context.Background(), newMachineSet("ms-new", machineDeployment, "2"))).To(Succeed())
+	})
+
+	AfterEach(func() {
+		eventuallyDeleteAllOf(cl, &capiv1beta1.Machine{}, &capiv1beta1.MachineList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineSet{}, &capiv1beta1.MachineSetList{})
+		eventuallyDeleteAllOf(cl, &capiv1beta1.MachineDeployment{}, &capiv1beta1.MachineDeploymentList{})
+		eventuallyDeleteAllOf(cl, &v1alpha1.ClusterAPINodeClass{}, &v1alpha1.ClusterAPINodeClassList{})
+	})
+
+	It("does not report drift when upgrades are left to Cluster API by default", func() {
+		nodeClaim := createNodeClaim("", "ms-old")
+		reason, err := provider.IsDrifted(context.Background(), nodeClaim)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(reason).To(BeEmpty())
+	})
+
+	It("does not report drift when upgrades are managed by Cluster API", func() {
+		nodeClaim := createNodeClaim(v1alpha1.UpgradeManagerClusterAPI, "ms-old")
+		reason, err := provider.IsDrifted(context.Background(), nodeClaim)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(reason).To(BeEmpty())
+	})
+
+	It("reports drift when upgrades are managed by Karpenter and the Machine is in an old MachineSet", func() {
+		nodeClaim := createNodeClaim(v1alpha1.UpgradeManagerKarpenter, "ms-old")
+		reason, err := provider.IsDrifted(context.Background(), nodeClaim)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(reason).To(Equal(MachineSetDrifted))
+	})
+
+	It("does not report drift when upgrades are managed by Karpenter and the Machine is in the current MachineSet", func() {
+		nodeClaim := createNodeClaim(v1alpha1.UpgradeManagerKarpenter, "ms-new")
+		reason, err := provider.IsDrifted(context.Background(), nodeClaim)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(reason).To(BeEmpty())
+	})
+
+	It("does not report drift when the Machine has no MachineSet", func() {
+		nodeClaim := createNodeClaim(v1alpha1.UpgradeManagerKarpenter, "")
+		reason, err := provider.IsDrifted(context.Background(), nodeClaim)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(reason).To(BeEmpty())
 	})
 })
 
@@ -837,4 +920,16 @@ func newMachineDeployment(name string, clusterName string, karpenterMember bool)
 	machineDeployment.Spec.ClusterName = clusterName
 	machineDeployment.Spec.Template.Spec.ClusterName = clusterName
 	return machineDeployment
+}
+
+func newMachineSet(name string, machineDeployment *capiv1beta1.MachineDeployment, revision string) *capiv1beta1.MachineSet {
+	machineSet := &capiv1beta1.MachineSet{}
+	machineSet.SetName(name)
+	machineSet.SetNamespace(machineDeployment.Namespace)
+	machineSet.SetLabels(map[string]string{capiv1beta1.MachineDeploymentNameLabel: machineDeployment.Name})
+	machineSet.SetAnnotations(map[string]string{capiv1beta1.RevisionAnnotation: revision})
+	machineSet.SetOwnerReferences([]metav1.OwnerReference{*metav1.NewControllerRef(machineDeployment, capiv1beta1.GroupVersion.WithKind("MachineDeployment"))})
+	machineSet.Spec.ClusterName = machineDeployment.Spec.ClusterName
+	machineSet.Spec.Template.Spec.ClusterName = machineDeployment.Spec.ClusterName
+	return machineSet
 }

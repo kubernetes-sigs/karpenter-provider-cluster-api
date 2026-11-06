@@ -49,5 +49,8 @@ func main() {
 			op.GetClient(),
 			op.EventRecorder,
 			cloudProvider,
+			op.MachineProvider,
+			op.MachineDeploymentProvider,
+			op.ManagementCluster.GetCache(),
 		)...).Start(ctx)
 }

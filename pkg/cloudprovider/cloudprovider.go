@@ -215,9 +215,41 @@ func (c *CloudProvider) GetSupportedNodeClasses() []status.Object {
 	return []status.Object{&v1alpha1.ClusterAPINodeClass{}}
 }
 
-// Return nothing since there's no cloud provider drift.
+// IsDrifted reports a NodeClaim as drifted when its NodeClass leaves upgrades to
+// Karpenter and its Machine belongs to a MachineSet other than its
+// MachineDeployment's current one. When upgrades are left to Cluster API nothing
+// is reported, as Cluster API replaces outdated Machines itself.
 func (c *CloudProvider) IsDrifted(ctx context.Context, nodeClaim *karpv1.NodeClaim) (cloudprovider.DriftReason, error) {
-	return "", nil
+	nodeClass, err := c.resolveNodeClassFromNodeClaim(ctx, nodeClaim)
+	if err != nil {
+		return "", fmt.Errorf("unable to resolve NodeClass to check drift: %w", err)
+	}
+	if nodeClass.UpgradeManager() != v1alpha1.UpgradeManagerKarpenter {
+		return "", nil
+	}
+
+	machine, err := c.findMachineForNodeClaim(ctx, nodeClaim)
+	if err != nil {
+		return "", fmt.Errorf("unable to find Machine to check drift: %w", err)
+	}
+	machineSetName, found := machine.GetLabels()[capiv1beta1.MachineSetNameLabel]
+	if !found {
+		return "", nil
+	}
+
+	machineDeployment, err := c.machineDeploymentFromMachine(ctx, machine)
+	if err != nil {
+		return "", fmt.Errorf("unable to check drift: %w", err)
+	}
+	currentMachineSetName, err := c.machineDeploymentProvider.CurrentMachineSetName(ctx, machineDeployment)
+	if err != nil {
+		return "", fmt.Errorf("unable to check drift: %w", err)
+	}
+	if currentMachineSetName == "" || currentMachineSetName == machineSetName {
+		return "", nil
+	}
+
+	return MachineSetDrifted, nil
 }
 
 func (c *CloudProvider) List(ctx context.Context) ([]*karpv1.NodeClaim, error) {
@@ -560,6 +592,12 @@ func isBelowMaxSize(machineDeployment *capiv1beta1.MachineDeployment) bool {
 	}
 	replicas := int(ptr.Deref(machineDeployment.Spec.Replicas, 0))
 	return replicas < maxSize
+}
+
+// InstanceTypeForMachineDeployment returns the instance type that Karpenter offers
+// for a MachineDeployment's Machines.
+func InstanceTypeForMachineDeployment(machineDeployment *capiv1beta1.MachineDeployment) *cloudprovider.InstanceType {
+	return &machineDeploymentToInstanceType(machineDeployment).InstanceType
 }
 
 func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *ClusterAPIInstanceType {

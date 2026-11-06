@@ -18,6 +18,7 @@ package cloudprovider
 
 import (
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
+	"sigs.k8s.io/karpenter/pkg/cloudprovider"
 )
 
 const (
@@ -26,4 +27,10 @@ const (
 	InstanceFamilyLabelKey = v1alpha1.Group + "/instance-family"
 	InstanceMemoryLabelKey = v1alpha1.Group + "/instance-memory"
 	InstanceCPULabelKey    = v1alpha1.Group + "/instance-cpu"
+)
+
+const (
+	// MachineSetDrifted is the drift reason for a NodeClaim whose Machine belongs to
+	// a MachineSet other than its MachineDeployment's current one.
+	MachineSetDrifted cloudprovider.DriftReason = "MachineSetDrifted"
 )

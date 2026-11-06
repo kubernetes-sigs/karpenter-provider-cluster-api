@@ -201,6 +201,69 @@ var _ = Describe("MachineDeployment DefaultProvider.Update method", func() {
 	})
 })
 
+var _ = Describe("MachineDeployment DefaultProvider.CurrentMachineSetName method", func() {
+	var provider Provider
+	var machineDeployment *capiv1beta1.MachineDeployment
+
+	BeforeEach(func() {
+		provider = NewDefaultProvider(context.Background(), cl)
+		machineDeployment = newMachineDeployment("test-machine-deployment", "workload-cluster", true)
+		Expect(cl.Create(context.Background(), machineDeployment)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineSet{}, client.InNamespace(testNamespace))).To(Succeed())
+		Expect(cl.DeleteAllOf(context.Background(), &capiv1beta1.MachineDeployment{}, client.InNamespace(testNamespace))).To(Succeed())
+		Eventually(func() client.ObjectList {
+			machineSetList := &capiv1beta1.MachineSetList{}
+			Expect(cl.List(context.Background(), machineSetList, client.InNamespace(testNamespace))).To(Succeed())
+			return machineSetList
+		}).Should(HaveField("Items", HaveLen(0)))
+	})
+
+	It("returns an empty name when the MachineDeployment has no MachineSets", func() {
+		name, err := provider.CurrentMachineSetName(context.Background(), machineDeployment)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(name).To(BeEmpty())
+	})
+
+	It("returns the MachineSet with the highest revision", func() {
+		Expect(cl.Create(context.Background(), newMachineSet("ms-a", machineDeployment, "3"))).To(Succeed())
+		Expect(cl.Create(context.Background(), newMachineSet("ms-b", machineDeployment, "10"))).To(Succeed())
+		Expect(cl.Create(context.Background(), newMachineSet("ms-c", machineDeployment, "9"))).To(Succeed())
+
+		name, err := provider.CurrentMachineSetName(context.Background(), machineDeployment)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(name).To(Equal("ms-b"))
+	})
+
+	It("ignores MachineSets without a revision or not controlled by the MachineDeployment", func() {
+		Expect(cl.Create(context.Background(), newMachineSet("ms-current", machineDeployment, "1"))).To(Succeed())
+		Expect(cl.Create(context.Background(), newMachineSet("ms-no-revision", machineDeployment, ""))).To(Succeed())
+		orphan := newMachineSet("ms-orphan", machineDeployment, "5")
+		orphan.OwnerReferences = nil
+		Expect(cl.Create(context.Background(), orphan)).To(Succeed())
+
+		name, err := provider.CurrentMachineSetName(context.Background(), machineDeployment)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(name).To(Equal("ms-current"))
+	})
+})
+
+func newMachineSet(name string, machineDeployment *capiv1beta1.MachineDeployment, revision string) *capiv1beta1.MachineSet {
+	machineSet := &capiv1beta1.MachineSet{}
+	machineSet.SetName(name)
+	machineSet.SetNamespace(machineDeployment.Namespace)
+	machineSet.SetLabels(map[string]string{capiv1beta1.MachineDeploymentNameLabel: machineDeployment.Name})
+	if revision != "" {
+		machineSet.SetAnnotations(map[string]string{capiv1beta1.RevisionAnnotation: revision})
+	}
+	machineSet.SetOwnerReferences([]metav1.OwnerReference{*metav1.NewControllerRef(machineDeployment, capiv1beta1.GroupVersion.WithKind("MachineDeployment"))})
+	machineSet.Spec.ClusterName = machineDeployment.Spec.ClusterName
+	machineSet.Spec.Template.Spec.ClusterName = machineDeployment.Spec.ClusterName
+	return machineSet
+}
+
 func newMachineDeployment(name string, clusterName string, karpenterMember bool) *capiv1beta1.MachineDeployment {
 	machineDeployment := &capiv1beta1.MachineDeployment{}
 	machineDeployment.SetName(name)
