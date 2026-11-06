@@ -6,30 +6,22 @@ aliases:
   - fabriziopandini
   - justinsb
   - neolit123
-  - vincepri
+  - hakman
+  - sbueringer
 
   # -----------------------------------------------------------
   # OWNER_ALIASES for Cluster API
   # -----------------------------------------------------------
 
-  # active folks who can be contacted to perform admin-related
-  # tasks on the repo, or otherwise approve any PRS.
-  cluster-api-admins:
-  - fabriziopandini
-  - sbueringer
-  - vincepri
-
   # non-admin folks who have write-access and can approve any PRs in the repo
   cluster-api-maintainers:
   - chrischdi
-  - enxebre
   - fabriziopandini
-  - killianmuldoon
   - sbueringer
-  - vincepri
+  - JoelSpeed
 
   # folks who can review and LGTM any PRs in the repo
   cluster-api-reviewers:
-  - jackfrancis
-  - JoelSpeed
+  - karthik-k-n
   - richardcase
+  - sivchari
