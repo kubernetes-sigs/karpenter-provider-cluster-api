@@ -4,7 +4,7 @@ go 1.25.5
 
 require (
 	github.com/awslabs/operatorpkg v0.0.0-20250909182303-e8e550b6f339
-	github.com/onsi/ginkgo/v2 v2.33.1
+	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/samber/lo v1.53.0
 	k8s.io/api v0.34.2
