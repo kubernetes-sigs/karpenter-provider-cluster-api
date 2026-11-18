@@ -31,7 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	capiv1beta1 "sigs.k8s.io/cluster-api/api/v1beta1"
+	capiv1beta2 "sigs.k8s.io/cluster-api/api/core/v1beta2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis/v1alpha1"
@@ -109,13 +109,13 @@ func (c *CloudProvider) Create(ctx context.Context, nodeClaim *karpv1.NodeClaim)
 	}
 
 	machine := result.Output.Machine
-	if machine.Spec.ProviderID == nil {
+	if machine.Spec.ProviderID == "" {
 		return nil, fmt.Errorf("cannot satisfy create, waiting for Machine %q to have ProviderID", machine.Name)
 	}
 
 	//  fill out nodeclaim with details
 	createdNodeClaim := createNodeClaimFromMachineDeployment(result.Output.MachineDeployment)
-	createdNodeClaim.Status.ProviderID = *machine.Spec.ProviderID
+	createdNodeClaim.Status.ProviderID = machine.Spec.ProviderID
 
 	return createdNodeClaim, nil
 }
@@ -276,12 +276,12 @@ func (c *CloudProvider) getExistingMachine(ctx context.Context, machineAnno stri
 		return nil, fmt.Errorf("failed to get NodeClaim's MachineDeployment %s: %w", machineName, err)
 	}
 
-	if m.Spec.ProviderID == nil {
+	if m.Spec.ProviderID == "" {
 		return nil, fmt.Errorf("cannot satisfy create, waiting for Machine %q to have ProviderID", m.Name)
 	}
 
 	nc := createNodeClaimFromMachineDeployment(md)
-	nc.Status.ProviderID = *m.Spec.ProviderID
+	nc.Status.ProviderID = m.Spec.ProviderID
 	return nc, nil
 }
 
@@ -314,7 +314,7 @@ func (c *CloudProvider) resolveInstanceType(ctx context.Context, nodeClaim *karp
 
 // findMachineForNodeClaim resolves a CAPI Machine from a NodeClaim's providerID
 // or Machine annotation.
-func (c *CloudProvider) findMachineForNodeClaim(ctx context.Context, nodeClaim *karpv1.NodeClaim) (*capiv1beta1.Machine, error) {
+func (c *CloudProvider) findMachineForNodeClaim(ctx context.Context, nodeClaim *karpv1.NodeClaim) (*capiv1beta2.Machine, error) {
 	if len(nodeClaim.Status.ProviderID) != 0 {
 		m, err := c.machineProvider.GetByProviderID(ctx, nodeClaim.Status.ProviderID)
 		if err != nil {
@@ -338,10 +338,10 @@ func (c *CloudProvider) findMachineForNodeClaim(ctx context.Context, nodeClaim *
 	return nil, fmt.Errorf("NodeClaim %q does not have a provider ID or Machine annotations, cannot delete", nodeClaim.Name)
 }
 
-func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machine *capiv1beta1.Machine) (*capiv1beta1.MachineDeployment, error) {
-	mdName, found := machine.GetLabels()[capiv1beta1.MachineDeploymentNameLabel]
+func (c *CloudProvider) machineDeploymentFromMachine(ctx context.Context, machine *capiv1beta2.Machine) (*capiv1beta2.MachineDeployment, error) {
+	mdName, found := machine.GetLabels()[capiv1beta2.MachineDeploymentNameLabel]
 	if !found {
-		return nil, fmt.Errorf("unable to find MachineDeployment for Machine %q, has no MachineDeployment label %q", machine.GetName(), capiv1beta1.MachineDeploymentNameLabel)
+		return nil, fmt.Errorf("unable to find MachineDeployment for Machine %q, has no MachineDeployment label %q", machine.GetName(), capiv1beta2.MachineDeploymentNameLabel)
 	}
 
 	machineDeployment, err := c.machineDeploymentProvider.Get(ctx, mdName, machine.GetNamespace())
@@ -372,11 +372,9 @@ func (c *CloudProvider) findInstanceTypesForNodeClass(ctx context.Context, nodeC
 	return instanceTypes, nil
 }
 
-func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta1.Machine) (*karpv1.NodeClaim, error) {
+func (c *CloudProvider) machineToNodeClaim(ctx context.Context, machine *capiv1beta2.Machine) (*karpv1.NodeClaim, error) {
 	nodeClaim := karpv1.NodeClaim{}
-	if machine.Spec.ProviderID != nil {
-		nodeClaim.Status.ProviderID = *machine.Spec.ProviderID
-	}
+	nodeClaim.Status.ProviderID = machine.Spec.ProviderID
 
 	// we want to get the MachineDeployment that owns this Machine to read the capacity information.
 	// to being this process, we get the MachineDeployment name from the Machine labels.
@@ -502,7 +500,7 @@ func capacityResourceListFromAnnotations(annotations map[string]string) corev1.R
 	return capacity
 }
 
-func createNodeClaimFromMachineDeployment(machineDeployment *capiv1beta1.MachineDeployment) *karpv1.NodeClaim {
+func createNodeClaimFromMachineDeployment(machineDeployment *capiv1beta2.MachineDeployment) *karpv1.NodeClaim {
 	nodeClaim := &karpv1.NodeClaim{}
 
 	instanceType := machineDeploymentToInstanceType(machineDeployment)
@@ -546,11 +544,11 @@ func labelsFromScaleFromZeroAnnotation(annotation string) map[string]string {
 // isBelowMaxSize checks if the MachineDeployment's current replicas are below the max size
 // defined by the Cluster Autoscaler annotation. If the annotation is not present or cannot
 // be parsed, it returns true (no limit enforced).
-func isBelowMaxSize(machineDeployment *capiv1beta1.MachineDeployment) bool {
+func isBelowMaxSize(machineDeployment *capiv1beta2.MachineDeployment) bool {
 	if machineDeployment == nil {
 		return false
 	}
-	maxSizeStr, ok := machineDeployment.Annotations[capiv1beta1.AutoscalerMaxSizeAnnotation]
+	maxSizeStr, ok := machineDeployment.Annotations[capiv1beta2.AutoscalerMaxSizeAnnotation]
 	if !ok {
 		return true
 	}
@@ -562,7 +560,7 @@ func isBelowMaxSize(machineDeployment *capiv1beta1.MachineDeployment) bool {
 	return replicas < maxSize
 }
 
-func machineDeploymentToInstanceType(machineDeployment *capiv1beta1.MachineDeployment) *ClusterAPIInstanceType {
+func machineDeploymentToInstanceType(machineDeployment *capiv1beta2.MachineDeployment) *ClusterAPIInstanceType {
 	instanceType := &ClusterAPIInstanceType{}
 
 	labels := nodeLabelsFromMachineDeployment(machineDeployment)
@@ -618,13 +616,13 @@ func managedNodeLabelsFromLabels(labels map[string]string) map[string]string {
 	managedLabels := map[string]string{}
 	for key, value := range labels {
 		dnsSubdomainOrName := strings.Split(key, "/")[0]
-		if dnsSubdomainOrName == capiv1beta1.NodeRoleLabelPrefix {
+		if dnsSubdomainOrName == capiv1beta2.NodeRoleLabelPrefix {
 			managedLabels[key] = value
 		}
-		if dnsSubdomainOrName == capiv1beta1.NodeRestrictionLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+capiv1beta1.NodeRestrictionLabelDomain) {
+		if dnsSubdomainOrName == capiv1beta2.NodeRestrictionLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+capiv1beta2.NodeRestrictionLabelDomain) {
 			managedLabels[key] = value
 		}
-		if dnsSubdomainOrName == capiv1beta1.ManagedNodeLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+capiv1beta1.ManagedNodeLabelDomain) {
+		if dnsSubdomainOrName == capiv1beta2.ManagedNodeLabelDomain || strings.HasSuffix(dnsSubdomainOrName, "."+capiv1beta2.ManagedNodeLabelDomain) {
 			managedLabels[key] = value
 		}
 	}
@@ -632,7 +630,7 @@ func managedNodeLabelsFromLabels(labels map[string]string) map[string]string {
 	return managedLabels
 }
 
-func nodeLabelsFromMachineDeployment(machineDeployment *capiv1beta1.MachineDeployment) map[string]string {
+func nodeLabelsFromMachineDeployment(machineDeployment *capiv1beta2.MachineDeployment) map[string]string {
 	labels := map[string]string{}
 
 	if machineDeployment.Spec.Template.Labels != nil {
