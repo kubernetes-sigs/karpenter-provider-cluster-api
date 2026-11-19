@@ -95,17 +95,14 @@ $TENANT_KUBECTL apply -f "$WORKSPACE"/test/resources/sample_deployment.yaml
 
 # scale up the deployment
 $TENANT_KUBECTL scale deployment scale-up --replicas=3
-
-printf "\nWaiting for 20 seconds for karpenter to scale up...\n"
-sleep 20
+$TENANT_KUBECTL wait deployment scale-up --for=jsonpath='{.status.readyReplicas}'=3 --timeout=5m
+$TENANT_KUBECTL wait nodeclaims --all --for=condition=Ready --timeout=2m
 
 $TENANT_KUBECTL get pods,nodeclaims,nodes -o wide
 
 # scale down the deployment
 $TENANT_KUBECTL scale deployment scale-up --replicas=0
-
-printf "\nWaiting for 60 seconds for karpenter to scale down...\n"
-sleep 60
+$TENANT_KUBECTL wait nodeclaims --all --for=delete --timeout=5m
 
 $TENANT_KUBECTL get pods,nodeclaims,nodes -o wide
 
