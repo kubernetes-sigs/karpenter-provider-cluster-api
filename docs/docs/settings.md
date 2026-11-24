@@ -10,6 +10,7 @@ Karpenter exposes environment variables and CLI flags that allow you to configur
 | BATCH_MAX_DURATION | \-\-batch-max-duration | The maximum length of a batch window. The longer this is, the more pods we can consider for provisioning at one time which usually results in fewer but larger nodes. (default = 10s)|
 | CLUSTER_API_CERTIFICATE_AUTHORITY_DATA | \-\-cluster-api-certificate-authority-data | The cert certificate authority of the cluster api manager cluster|
 | CLUSTER_API_KUBECONFIG | \-\-cluster-api-kubeconfig | The path to the cluster api manager cluster kubeconfig file.  Defaults to service account credentials if not specified.|
+| CLUSTER_API_NAMESPACE | --cluster-api-namespace | Restrict the management cluster client and cache to this namespace, so a namespaced Role is enough. Empty watches every namespace.|
 | CLUSTER_API_SKIP_TLS_VERIFY | \-\-cluster-api-skip-tls-verify | Skip the check for certificate for validity of the cluster api manager cluster. This will make HTTPS connections insecure|
 | CLUSTER_API_TOKEN | \-\-cluster-api-token | The Bearer token for authentication of the cluster api manager cluster|
 | CLUSTER_API_URL | \-\-cluster-api-url | The url of the cluster api manager cluster|
