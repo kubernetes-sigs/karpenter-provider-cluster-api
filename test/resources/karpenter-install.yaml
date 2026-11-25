@@ -87,13 +87,14 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: karpenter
+        app.kubernetes.io/instance: karpenter
     spec:
       serviceAccountName: karpenter
       priorityClassName: system-cluster-critical
       securityContext:
         runAsNonRoot: true
       containers:
-        - name: karpenter
+        - name: controller
           image: REPLACE_IMAGE # this is replaced when we do 'make apply'
           imagePullPolicy: Never
           command:
