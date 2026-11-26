@@ -51,7 +51,7 @@ ifdef IMG_EXTRA_TAG
 IMG_BUILD_EXTRA_OPTS += -t $(IMG_EXTRA_TAG)
 endif
 
-KARPENTER_CORE_DIR ?= $(shell go list -m -f '{{ .Dir }}' sigs.k8s.io/karpenter)
+KARPENTER_CORE_DIR ?= $(shell go list -mod=readonly -m -f '{{ .Dir }}' sigs.k8s.io/karpenter)
 
 all: help
 
@@ -96,9 +96,11 @@ image-push: PUSH=--push
 image-push: image-build$(USE_DOCKER)
 
 .PHONY: manifests
-manifests: ## generate the controller-gen kubernetes manifests
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./..." output:crd:artifacts:config=pkg/apis/crds
-	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./vendor/sigs.k8s.io/karpenter/pkg/apis/..." output:crd:artifacts:config=pkg/apis/crds
+manifests: ## generate the provider CRD and copy the Karpenter core CRDs from sigs.k8s.io/karpenter (run 'make vendor' first)
+	$(CONTROLLER_GEN) crd paths="./pkg/apis/..." output:crd:artifacts:config=pkg/apis/crds
+	cp $(KARPENTER_CORE_DIR)/pkg/apis/crds/*.yaml pkg/apis/crds/
+	chmod u+w pkg/apis/crds/*.yaml
+	cp pkg/apis/crds/*.yaml charts/karpenter/crds/
 
 .PHONY: test
 test: vendor unit ## vendor the dependencies and run unit tests
