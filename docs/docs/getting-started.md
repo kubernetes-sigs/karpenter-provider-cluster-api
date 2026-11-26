@@ -10,8 +10,9 @@ These instructions work best with the following versions and settings:
 | Component | Version |
 |-----------|---------|
 | karpenter-provider-cluster-api | 0.2.0 |
-| cluster-api | 1.10 |
-| kubernetes | 1.33 |
+| karpenter | 1.14 |
+| cluster-api | 1.13 |
+| kubernetes | 1.35 |
 
 Karpenter is connected to Cluster API management with `--cluster-api-kubeconfig` flag.
 
@@ -38,7 +39,7 @@ You will need to build the binary for the Karpenter Cluster API provider. To do
 this you will need a few prerequisities:
 
 * make
-* Go language 1.22+
+* Go language 1.26.10+
 
 The next step is to clone this repository and navigate to the directory in
 a shell.
@@ -59,7 +60,7 @@ make build
 ```
 
 If there are no errors with the build, you should have a new directory and file in
-the repository: `bin/karpenter-cluster-controller`.
+the repository: `bin/karpenter-clusterapi-controller`.
 
 This is the binary used for running the Karpenter Cluster API provider.
 
@@ -106,6 +107,8 @@ To apply these custom resources, run the following commands in the cluster that 
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/karpenter-provider-cluster-api/refs/heads/main/pkg/apis/crds/karpenter.cluster.x-k8s.io_clusterapinodeclasses.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/karpenter-provider-cluster-api/refs/heads/main/pkg/apis/crds/karpenter.sh_nodeclaims.yaml
 kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/karpenter-provider-cluster-api/refs/heads/main/pkg/apis/crds/karpenter.sh_nodepools.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/karpenter-provider-cluster-api/refs/heads/main/pkg/apis/crds/karpenter.sh_nodeoverlays.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/karpenter-provider-cluster-api/refs/heads/main/pkg/apis/crds/autoscaling.x-k8s.io_capacitybuffers.yaml
 ```
 
 The following are basic examples of the NodePool and ClusterAPINodeClass resources. In brief,

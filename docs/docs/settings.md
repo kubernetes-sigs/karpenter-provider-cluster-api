@@ -13,10 +13,14 @@ Karpenter exposes environment variables and CLI flags that allow you to configur
 | CLUSTER_API_SKIP_TLS_VERIFY | \-\-cluster-api-skip-tls-verify | Skip the check for certificate for validity of the cluster api manager cluster. This will make HTTPS connections insecure|
 | CLUSTER_API_TOKEN | \-\-cluster-api-token | The Bearer token for authentication of the cluster api manager cluster|
 | CLUSTER_API_URL | \-\-cluster-api-url | The url of the cluster api manager cluster|
+| CPU_REQUESTS | \-\-cpu-requests | CPU requests in millicores on the container running the controller. (default = 1000)|
+| DISABLE_CLUSTER_STATE_OBSERVABILITY | \-\-disable-cluster-state-observability | Disable cluster state metrics and events|
+| DISABLE_CONTROLLER_WARMUP | \-\-disable-controller-warmup | Disable controller warmup which starts controller sources before leader election is won. Controller warmup pre-populates caches and improves leader failover time.|
 | DISABLE_LEADER_ELECTION | \-\-disable-leader-election | Disable the leader election client before executing the main loop. Disable when running replicated components for high availability is not desired.|
 | ENABLE_PROFILING | \-\-enable-profiling | Enable the profiling on the metric endpoint|
-| FEATURE_GATES | \-\-feature-gates | Optional features can be enabled / disabled using feature gates. Current options are: NodeRepair, ReservedCapacity, and SpotToSpotConsolidation (default = NodeRepair=false,ReservedCapacity=false,SpotToSpotConsolidation=false)|
+| FEATURE_GATES | \-\-feature-gates | Optional features can be enabled / disabled using feature gates. Current options are: NodeRepair, ReservedCapacity, SpotToSpotConsolidation, NodeOverlay, StaticCapacity, and CapacityBuffer. (default = NodeRepair=false,ReservedCapacity=true,SpotToSpotConsolidation=false,NodeOverlay=false,StaticCapacity=false,CapacityBuffer=false)|
 | HEALTH_PROBE_PORT | \-\-health-probe-port | The port the health probe endpoint binds to for reporting controller health (default = 8081)|
+| IGNORE_DRA_REQUESTS | \-\-ignore-dra-requests | When set, Karpenter will ignore pods' DRA requests during scheduling simulations. NOTE: This flag will be removed once formal DRA support is GA in Karpenter.|
 | KARPENTER_SERVICE | \-\-karpenter-service | The Karpenter Service name for the dynamic webhook certificate|
 | KUBE_CLIENT_BURST | \-\-kube-client-burst | The maximum allowed burst of queries to the kube-apiserver (default = 300)|
 | KUBE_CLIENT_QPS | \-\-kube-client-qps | The smoothed rate of qps to kube-apiserver (default = 200)|
@@ -27,4 +31,5 @@ Karpenter exposes environment variables and CLI flags that allow you to configur
 | LOG_OUTPUT_PATHS | \-\-log-output-paths | Optional comma separated paths for directing log output (default = stdout)|
 | MEMORY_LIMIT | \-\-memory-limit | Memory limit on the container running the controller. The GC soft memory limit is set to 90% of this value. (default = -1)|
 | METRICS_PORT | \-\-metrics-port | The port the metric endpoint binds to for operating metrics about the controller itself (default = 8080)|
+| MIN_VALUES_POLICY | \-\-min-values-policy | Min values policy for scheduling. Options include 'Strict' for existing behavior where min values are strictly enforced or 'BestEffort' where Karpenter relaxes min values when it isn't satisfied. (default = Strict)|
 | PREFERENCE_POLICY | \-\-preference-policy | How the Karpenter scheduler should treat preferences. Preferences include preferredDuringSchedulingIgnoreDuringExecution node and pod affinities/anti-affinities and ScheduleAnyways topologySpreadConstraints. Can be one of 'Ignore' and 'Respect' (default = Respect)|

@@ -62,8 +62,8 @@ type ClusterAPINodeClassList struct {
 // The following methods are implemented to satisfy the Object interface
 // from https://github.com/awslabs/operatorpkg/blob/main/status/condition.go
 // which in turn is utilized by the cloudprovider.GetSupportedNodeClasses method.
-func (nc *ClusterAPINodeClass) StatusConditions() status.ConditionSet {
-	return status.NewReadyConditions().For(nc)
+func (nc *ClusterAPINodeClass) StatusConditions(opts ...status.ForOption) status.ConditionSet {
+	return status.NewReadyConditions().For(nc, opts...)
 }
 
 func (nc *ClusterAPINodeClass) GetConditions() []status.Condition {
