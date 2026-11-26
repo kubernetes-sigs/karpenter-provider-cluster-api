@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/cluster"
 	"sigs.k8s.io/karpenter-provider-cluster-api/pkg/apis"
@@ -80,6 +81,9 @@ func buildManagementClusterKubeClient(ctx context.Context, operator *operator.Op
 	if clusterAPIKubeConfig != nil {
 		mgmtCluster, err := cluster.New(clusterAPIKubeConfig, func(o *cluster.Options) {
 			o.Scheme = operator.GetScheme()
+			if ns := options.FromContext(ctx).ClusterAPINamespace; ns != "" {
+				o.Cache.DefaultNamespaces = map[string]cache.Config{ns: {}}
+			}
 		})
 		if err != nil {
 			return nil, fmt.Errorf("unable to create new kube config for management cluster: %w", err)

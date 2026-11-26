@@ -39,6 +39,7 @@ type Options struct {
 	ClusterAPIToken                    string
 	ClusterAPICertificateAuthorityData string
 	ClusterAPISkipTlsVerify            bool
+	ClusterAPINamespace                string
 }
 
 func (o *Options) AddFlags(fs *karpoptions.FlagSet) {
@@ -46,6 +47,7 @@ func (o *Options) AddFlags(fs *karpoptions.FlagSet) {
 	fs.StringVar(&o.ClusterAPIUrl, "cluster-api-url", env.WithDefaultString("CLUSTER_API_URL", ""), "The url of the cluster api manager cluster")
 	fs.StringVar(&o.ClusterAPIToken, "cluster-api-token", env.WithDefaultString("CLUSTER_API_TOKEN", ""), "The Bearer token for authentication of the cluster api manager cluster")
 	fs.StringVar(&o.ClusterAPICertificateAuthorityData, "cluster-api-certificate-authority-data", env.WithDefaultString("CLUSTER_API_CERTIFICATE_AUTHORITY_DATA", ""), "The cert certificate authority of the cluster api manager cluster")
+	fs.StringVar(&o.ClusterAPINamespace, "cluster-api-namespace", env.WithDefaultString("CLUSTER_API_NAMESPACE", ""), "Restrict the management cluster client and cache to this namespace, so a namespaced Role is enough. Empty watches every namespace.")
 	fs.BoolVarWithEnv(&o.ClusterAPISkipTlsVerify, "cluster-api-skip-tls-verify", "CLUSTER_API_SKIP_TLS_VERIFY", false, "Skip the check for certificate for validity of the cluster api manager cluster. This will make HTTPS connections insecure")
 }
 

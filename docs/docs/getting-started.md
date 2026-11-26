@@ -85,6 +85,25 @@ If you are using a joined cluster, where the Cluster API resources reside in the
 cluster as the Karpenter resources, then you do not need to specify a separate kubeconfig
 using the command line flag.
 
+By default the provider watches Cluster API resources in every namespace of the management
+cluster, which needs cluster-wide read access. To run with namespaced permissions only, set
+`--cluster-api-namespace` (environment variable `CLUSTER_API_NAMESPACE`, or `env.clusterAPINamespace`
+in the Helm chart) to the namespace that holds the Machines and MachineDeployments. The provider
+then only caches and calls that namespace, and the identity it uses on the management cluster
+needs just this Role and a RoleBinding to it in that namespace:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: karpenter-cluster-api
+  namespace: <cluster-api-namespace>
+rules:
+  - apiGroups: ["cluster.x-k8s.io"]
+    resources: ["machines", "machinedeployments"]
+    verbs: ["get", "list", "watch", "update"]
+```
+
 ### Namespace configuration
 
 Karpenter wants to know the namespace where it will be running. This can be set with the

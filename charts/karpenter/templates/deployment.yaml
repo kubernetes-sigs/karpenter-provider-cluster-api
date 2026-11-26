@@ -62,6 +62,10 @@ spec:
             - name: CLUSTER_API_KUBECONFIG
               value: "{{ . }}"
           {{- end }}
+          {{- with .Values.env.clusterAPINamespace }}
+            - name: CLUSTER_API_NAMESPACE
+              value: "{{ . }}"
+          {{- end }}
           {{- with .Values.env.clusterAPISkipTLSVerify }}
             - name: CLUSTER_API_SKIP_TLS_VERIFY
               value: "{{ . }}"
