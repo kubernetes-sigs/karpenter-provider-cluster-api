@@ -33,7 +33,8 @@ ifeq ($(CONTAINER_RUNTIME), docker)
 	USE_DOCKER = -docker
 endif
 
-BUILDER_IMAGE ?=
+GO_VERSION ?= $(shell awk '$$1 == "go" { print $$2; exit }' $(PROJECT_DIR)/go.mod)
+BUILDER_IMAGE ?= docker.io/library/golang:$(GO_VERSION)
 
 BUILDX_CMD ?= $(CONTAINER_RUNTIME) buildx
 IMG_BUILD_CMD ?= $(BUILDX_CMD) build
