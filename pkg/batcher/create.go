@@ -184,7 +184,8 @@ func execCreateBatch(
 }
 
 // pollForNUnclaimedMachines lists Machines belonging to the MachineDeployment
-// that have not yet been claimed (no NodePoolMemberLabel). It polls every
+// that have not yet been claimed (no NodePoolMemberLabel) and already have a
+// ProviderID. It polls every
 // second until count Machines are found or the timeout elapses, returning
 // whatever has been collected so far.
 func pollForNUnclaimedMachines(
@@ -226,6 +227,13 @@ func pollForNUnclaimedMachines(
 					continue
 				}
 				if _, marked := m.GetAnnotations()[capiv1beta2.DeleteMachineAnnotation]; marked {
+					continue
+				}
+				// A Machine without a ProviderID has no backing instance yet. Binding it would leave a
+				// NodeClaim that never launches, and Karpenter does not call Delete for such a NodeClaim,
+				// so the Machine and its replica would be leaked. It stays unclaimed and counts as supply
+				// in the next batch, so retries do not grow the replica count.
+				if m.Spec.ProviderID == "" {
 					continue
 				}
 				claimed[m.Name] = true
