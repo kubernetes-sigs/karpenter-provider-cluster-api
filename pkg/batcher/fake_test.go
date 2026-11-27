@@ -298,5 +298,6 @@ func newMachineForMD(name, namespace, mdName string) *capiv1beta2.Machine {
 				capiv1beta2.MachineDeploymentNameLabel: mdName,
 			},
 		},
+		Spec: capiv1beta2.MachineSpec{ProviderID: "fake://" + name},
 	}
 }

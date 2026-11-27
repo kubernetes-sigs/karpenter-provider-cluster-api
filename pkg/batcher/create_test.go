@@ -19,6 +19,7 @@ package batcher_test
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -233,6 +234,44 @@ var _ = Describe("Create Batching", func() {
 
 		Expect(fakeMDP.GetCallCount.Load()).To(BeNumerically("==", 1))
 		Expect(fakeMDP.UpdateCallCount.Load()).To(BeNumerically("==", 1))
+	})
+
+	It("should not claim a Machine that has no ProviderID yet and should count it as supply instead of growing replicas", func() {
+		// The pool is at its target size, but its only Machine is still waiting for an instance.
+		fakeMDP.AddMD(newMachineDeployment("md-0", "default", 1))
+		pending := newMachineForMD("machine-0", "default", "md-0")
+		pending.Spec.ProviderID = ""
+		fakeMP.AddMachine(pending)
+
+		cb, _ := newCreateBatcher("nc-0")
+		r := cb.Add(ctx, &batcher.CreateInput{NodeClaimName: "nc-0", MachineDeploymentName: "md-0", MachineDeploymentNS: "default"})
+		Expect(r.Err).To(HaveOccurred())
+
+		Expect(fakeMP.GetMachine("machine-0", "default").Labels).NotTo(HaveKey(providers.NodePoolMemberLabel))
+		Expect(*fakeMDP.GetMD("md-0", "default").Spec.Replicas).To(BeNumerically("==", 1))
+		Expect(fakeMDP.UpdateCallCount.Load()).To(BeNumerically("==", 0))
+	})
+
+	It("should claim the Machine once it receives a ProviderID", func() {
+		fakeMDP.AddMD(newMachineDeployment("md-0", "default", 1))
+		pending := newMachineForMD("machine-0", "default", "md-0")
+		pending.Spec.ProviderID = ""
+		fakeMP.AddMachine(pending)
+
+		cb, kubeClient := newCreateBatcher("nc-0")
+		go func() {
+			defer GinkgoRecover()
+			time.Sleep(1500 * time.Millisecond)
+			m := fakeMP.GetMachine("machine-0", "default")
+			m.Spec.ProviderID = "fake://machine-0"
+			fakeMP.AddMachine(m)
+		}()
+
+		r := cb.Add(ctx, &batcher.CreateInput{NodeClaimName: "nc-0", MachineDeploymentName: "md-0", MachineDeploymentNS: "default"})
+		Expect(r.Err).NotTo(HaveOccurred())
+		expectMachineLabeled("machine-0", "default")
+		expectNodeClaimAnnotated(kubeClient, "nc-0", "default/machine-0")
+		Expect(fakeMDP.UpdateCallCount.Load()).To(BeNumerically("==", 0))
 	})
 
 	It("should increment only by deficit and not rollback when too few machines are available", func() {
